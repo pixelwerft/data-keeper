@@ -4,14 +4,17 @@ namespace pixelwerft\datakeeper\services;
 
 use Craft;
 use craft\base\Component;
+use craft\helpers\App;
 use craft\helpers\UrlHelper;
+use craft\models\Update;
+use craft\models\UpdateRelease;
 use pixelwerft\datakeeper\DataKeeper;
 use pixelwerft\datakeeper\helpers\Growth;
 use pixelwerft\datakeeper\helpers\Levels;
 
 /**
- * Remote queries: the stored measurement as JSON for a tool outside the site (a dashboard that watches several
- * sites, for example).
+ * Remote queries: the last measurement and what the site runs on (Craft, PHP, the database, the plugins, the updates
+ * that are waiting) as JSON for a tool outside the site – a dashboard that watches several sites, for example.
  *
  * Off until «Allow remote queries» is switched on in the settings. Access needs the key of the site: a random string
  * that is generated once, kept in the plugin's file in `storage/` (not in the project config, so it does not end up
@@ -20,7 +23,7 @@ use pixelwerft\datakeeper\helpers\Levels;
 class Remote extends Component
 {
     /** Version of the answer's structure; raised when a field changes its meaning or goes away. */
-    public const SCHEMA = 1;
+    public const SCHEMA = 2;
 
     private const KEY_LENGTH = 48;
 
@@ -75,13 +78,119 @@ class Remote extends Component
     }
 
     /**
-     * What the overview shows, as plain data: the key figures with their levels and changes, the tables, the folders,
-     * their sums and the course. Reads the stored measurement only – it never measures. Labels are English.
+     * The answer to a remote query: the key figures of the last measurement, and what the site runs on (Craft, PHP,
+     * the database, the plugins) with the updates that are waiting.
      *
-     * @param bool $daily the course day by day instead of the last measurement of each month
+     * The measurement is read as it was stored – nothing is measured. The updates come from Craft, which keeps what
+     * it found for a day and asks its update service again after that.
+     *
+     * @param bool $details also everything else the overview shows (levels, tables, folders, the course), under `details`
+     * @param bool $daily in the details, the course day by day instead of the last measurement of each month
      * @return array<string, mixed>
      */
-    public function data(bool $daily = false): array
+    public function data(bool $details = false, bool $daily = false): array
+    {
+        $data = [
+            'schema' => self::SCHEMA,
+            'site' => Craft::$app->getSites()->getPrimarySite()->getName(),
+            'lastMeasurement' => $this->lastMeasurement(),
+            'craftCms' => $this->craftCms(),
+        ];
+        if ($details) {
+            $data['details'] = $this->details($daily);
+        }
+        return $data;
+    }
+
+    /**
+     * The key figures of the last measurement (null: never measured). Sizes are in MB.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function lastMeasurement(): ?array
+    {
+        $last = DataKeeper::$plugin->measurements->last();
+        if ($last === null) {
+            return null;
+        }
+        $figures = $last['figures'];
+        $folder = fn(string $key): array => [
+            'size' => $last['folders'][$key]['mb'] ?? $figures[$key] ?? null,
+            'files' => $last['folders'][$key]['files'] ?? null,
+        ];
+        return [
+            'date' => $last['measuredAt'],
+            'timestamp' => strtotime($last['measuredAt']),
+            'sizeUnit' => 'MB',
+            'databaseSize' => $figures['database'] ?? null,
+            'savedVersions' => $figures['revisions'] ?? null,
+            'mostVersionsOfOneEntry' => $figures['maxRevisions'] ?? null,
+            'changeRecords' => $figures['changedFields'] ?? null,
+            'deletedElements' => $figures['deleted'] ?? null,
+            'backups' => $folder('backups'),
+            'logs' => $folder('logs'),
+            'cache' => ['size' => $figures['cache'] ?? null, 'files' => $last['cache']['files'] ?? null],
+        ];
+    }
+
+    /**
+     * What the site runs on, and the updates that are waiting.
+     *
+     * @return array<string, mixed>
+     */
+    private function craftCms(): array
+    {
+        $db = Craft::$app->getDb();
+        $plugins = [];
+        $names = [];
+        foreach (Craft::$app->getPlugins()->getAllPlugins() as $handle => $plugin) {
+            $plugins[] = ['name' => $plugin->name, 'handle' => $handle, 'version' => $plugin->getVersion()];
+            $names[$handle] = $plugin->name;
+        }
+
+        return [
+            'version' => Craft::$app->getVersion(),
+            'phpVersion' => PHP_VERSION,
+            'databaseVersion' => $db->getDriverLabel() . ' ' . App::normalizeVersion($db->getSchema()->getServerVersion()),
+            'plugins' => $plugins,
+            'updatesAvailable' => $this->updates($names),
+        ];
+    }
+
+    /**
+     * The versions Craft and the plugins could be updated to, newest first; empty where there is nothing to update.
+     * Null if Craft could not find out (its update service was not reachable, for example).
+     *
+     * @param array<string, string> $names plugin handle => name
+     * @return array{cms: string[], plugins: object}|null `plugins` maps the name of a plugin to its versions
+     */
+    private function updates(array $names): ?array
+    {
+        try {
+            $updates = Craft::$app->getUpdates()->getUpdates();
+        } catch (\Throwable $e) {
+            Craft::warning('Could not read the available updates: ' . $e->getMessage(), __METHOD__);
+            return null;
+        }
+
+        $versions = fn(Update $update): array => array_map(fn(UpdateRelease $release) => $release->version, $update->releases);
+        $plugins = [];
+        foreach ($updates->plugins as $handle => $update) {
+            if ($update->releases) {
+                $plugins[$names[$handle] ?? $handle] = $versions($update);
+            }
+        }
+        // an object also when it is empty: in JSON it is always `{…}`, never `[]`
+        return ['cms' => $versions($updates->cms), 'plugins' => (object)$plugins];
+    }
+
+    /**
+     * Everything else the overview shows, as plain data: the key figures with their levels and changes, the tables,
+     * the folders, their sums, the single measurements of the last days and the course. Labels are English.
+     *
+     * @return array<string, mixed>
+     */
+    private function details(bool $daily): array
     {
         $plugin = DataKeeper::$plugin;
         $last = $plugin->measurements->last();
@@ -121,11 +230,7 @@ class Remote extends Component
         }
 
         return [
-            'schema' => self::SCHEMA,
-            'plugin' => $plugin->getVersion(),
-            'site' => Craft::$app->getSites()->getPrimarySite()->getName(),
             'url' => UrlHelper::cpUrl('data-keeper'),
-            'measuredAt' => $last['measuredAt'] ?? null,
             'comparedWith' => $growth['since'],
             'status' => $last ? Levels::worst($levels) : null,
             'figures' => $figures,
@@ -138,6 +243,7 @@ class Remote extends Component
             ],
             'versionAge' => $last['versionAge'] ?? null,
             'config' => $last['config'] ?? null,
+            'recent' => $plugin->measurements->recent(),
             'history' => $daily ? $history : Growth::byMonth($history),
         ];
     }

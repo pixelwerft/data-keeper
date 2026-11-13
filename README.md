@@ -26,8 +26,8 @@ The screenshots show made-up figures from a test install.
 ## Features
 
 - **Overview** – a card per key figure (database size, saved versions, most versions of one entry, change records,
-  deleted elements, backups, logs) with a level (*OK*, *Keep an eye on it*, *Act now*) and the change since the last
-  measurement; the largest database tables, the folders (backups, logs, temporary files, image transforms, every local
+  deleted elements, backups, logs, cache) with a level (*OK*, *Keep an eye on it*, *Act now*) and the change since the
+  last measurement; the database tables, the folders (backups, logs, temporary files, image transforms, every local
   asset volume), and the course over the months.
 - **Measuring on request** – nothing measures by itself. Measure from the control panel, the console or the queue (for a
   daily cron job). The measurements live in one small JSON file in `storage/data-keeper/`, **not in your
@@ -46,8 +46,11 @@ The screenshots show made-up figures from a test install.
   delete single ones, optimize the database tables and (MySQL, MariaDB) check them for damage. Each opens in a dialog,
   says what it would do, and only runs after you confirm.
 - **Sums** – below the database tables (the ones listed and all of them) and below the file storage.
-- **Remote queries** – let a tool outside the site read the figures as JSON, for example a dashboard that watches
-  several sites. Off by default; access needs the key of the site.
+- **Every measurement counts** – measure again after a cleanup: the measurements of the last 31 days are listed one
+  by one, also several on one day; the course keeps the last one of each day.
+- **Remote queries** – let a tool outside the site read the figures, the versions of Craft, PHP, the database and the
+  plugins and the available updates as JSON, for example a dashboard that watches several sites. Off by default;
+  access needs the key of the site.
 - **Old versions at a glance** – the overview says how many saved versions are older than a year and older than two years.
 - **Notifications** – switch on the topics you care about (a figure got too big, no measurement for a while, a cleanup
   finished or failed, old data is waiting). Each is available as a **notice in the control panel**, as a **message
@@ -212,13 +215,14 @@ nothing runs before you confirm, and the work is done in the queue.
 | Deleted elements | *Clear* | Empties the trash with Craft’s own garbage collection, as `craft gc --delete-all-trashed` does. |
 | Backups | *Files* | Lists the files in the backup folder; each can be deleted after the browser asked «really?». |
 | Logs | *Clear* | Removes all log files directly in the log folder. Can be switched off with `logsClearable`. |
+| Cache | *Clear* | Clears Craft’s data cache, the compiled templates and the compiled classes, as Craft’s own *Caches* utility does for these three. Nothing is lost; Craft builds them again. |
 
 The last results are listed on the overview under *Last actions*.
 
 ## Remote queries
 
 A tool outside the site – a dashboard that watches several sites, for example – can read what the overview shows.
-Switch on **Allow remote queries** in the settings (`allowRemote`); until then the address answers 404.
+Switch on **Allow remote queries** in the settings (`allowRemote`); until then the address answers 403.
 
 Access needs the **key of the site**. It is generated the first time an admin opens the *Information* tab of the
 overview, where it can be copied and replaced by a new one. It is kept in the plugin’s file in `storage/`, not in the
@@ -226,14 +230,68 @@ project config, so it does not end up in Git, differs per environment and can be
 
 ```bash
 curl -H "Authorization: Bearer $KEY" "https://example.com/actions/data-keeper/remote"
-curl "https://example.com/actions/data-keeper/remote?key=$KEY&history=daily"   # tools that can only call a URL
+curl "https://example.com/actions/data-keeper/remote?key=$KEY"   # tools that can only call a URL
 ```
 
-The answer holds `schema`, `plugin`, `site`, `url`, `measuredAt`, `comparedWith`, `status` (`ok`, `warn`, `alert`),
-`figures` (per key figure: `label`, `value`, `unit`, `level`, `warn`, `alert`, `change`), `tables`, `tablesTotal`,
-`folders`, `foldersTotal`, `versionAge`, `config` and `history` (the last measurement of each month, or day by day with
-`?history=daily`). It only reads what was stored – it never measures – and answers 401 without the right key. A header
-is safer than `?key=` (URLs end up in logs). If `storage/` is not persistent on your host, the key changes with it.
+The answer says what the last measurement found and what the site runs on:
+
+```json
+{
+  "schema": 2,
+  "site": "Example",
+  "lastMeasurement": {
+    "date": "2026-11-13T05:47:04+01:00",
+    "timestamp": 1794545224,
+    "sizeUnit": "MB",
+    "databaseSize": 683,
+    "savedVersions": 11720,
+    "mostVersionsOfOneEntry": 36,
+    "changeRecords": 280631,
+    "deletedElements": 508,
+    "backups": { "size": 1460.2, "files": 14 },
+    "logs": { "size": 1.5, "files": 9 },
+    "cache": { "size": 2, "files": 91 }
+  },
+  "craftCms": {
+    "version": "5.12.0",
+    "phpVersion": "8.3.30",
+    "databaseVersion": "MariaDB 10.11.19",
+    "plugins": [
+      { "name": "Data Keeper", "handle": "data-keeper", "version": "1.4.0" }
+    ],
+    "updatesAvailable": {
+      "cms": ["5.12.1"],
+      "plugins": { "Data Keeper": ["1.4.1"] }
+    }
+  }
+}
+```
+
+- `lastMeasurement` is `null` before the first measurement. It is read as it was stored – nothing is measured. Sizes
+  are in MB.
+- `updatesAvailable` lists the versions Craft and the plugins could be updated to, newest first; `cms` is an empty
+  list and `plugins` an empty object when there is nothing to update. It is `null` if Craft could not find out. The
+  list comes from Craft, which keeps what it found for a day and asks its update service again after that – such a
+  call takes a moment longer.
+- `?details=1` adds `details`: the key figures with their levels, limits and changes (`figures`), `status`,
+  `comparedWith`, `tables`, `tablesTotal`, `folders`, `foldersTotal`, `versionAge`, `config`, `recent` (every
+  measurement of the last 31 days) and `history` (the last measurement of each month, or day by day with
+  `&history=daily`).
+
+A header is safer than `?key=` (URLs end up in logs). If `storage/` is not persistent on your host, the key changes
+with it. The answer names the versions the site runs on and the updates it is missing, so treat the key like a
+password.
+
+The answer is always JSON, also when something is wrong:
+
+| HTTP status | `error` | When |
+| --- | --- | --- |
+| 403 | `disabled` | «Allow remote queries» is switched off. |
+| 401 | `unauthorized` | The key is missing or wrong. |
+
+```json
+{ "error": "disabled", "message": "Remote queries are not allowed on this site. Switch on «Allow remote queries» in the settings of Data Keeper.", "status": 403 }
+```
 
 ## Console commands
 

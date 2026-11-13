@@ -78,13 +78,13 @@
             <span class="dk-label">{{ limit.label|t('data-keeper') }}</span>
           </span>
           <strong class="dk-value">{{ m.num(value) }}{% if limit.unit %} <small>{{ limit.unit }}</small>{% endif %}</strong>
-          <span class="dk-level">{{ m.level(level) }}</span>
+          {% if value is not null %}<span class="dk-level">{{ m.level(level) }}</span>{% endif %}
           <span class="dk-growth">
             {% set g = growth.values[key] ?? null %}
             {% if g is not null %}
               {{ '{change} since {date}'|t('data-keeper', { change: (g >= 0 ? '+' : '') ~ g|number(g == g|round ? 0 : 1), date: growth.since|date('short') }) }}
             {% else %}
-              {{ 'No earlier measurement yet'|t('data-keeper') }}
+              {{ value is null ? 'Not measured yet'|t('data-keeper') : 'No earlier measurement yet'|t('data-keeper') }}
             {% endif %}
           </span>
           <span class="dk-limit light">{{ 'Keep an eye on it from {warn}, act from {alert}{unit}'|t('data-keeper', { warn: m.num(limit.warn), alert: m.num(limit.alert), unit: unit }) }}</span>
@@ -214,6 +214,22 @@
             {% endfor %}
           </tbody>
         </table>
+      </section>
+    {% endif %}
+
+    {# every single measurement of the last days, so a second one on the same day shows up next to the first #}
+    {% if recent|length %}
+      <section>
+        <h2>{{ 'Last measurements'|t('data-keeper') }}</h2>
+        <table class="data fullwidth">
+          <thead><tr><th>{{ 'Date'|t('data-keeper') }}</th><th class="dk-num">{{ 'Database MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Versions'|t('data-keeper') }}</th><th class="dk-num">{{ 'Backups MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Logs MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Files MB'|t('data-keeper') }}</th></tr></thead>
+          <tbody>
+            {% for row in recent %}
+              <tr><td>{{ row.at|datetime('short') }}</td><td class="dk-num">{{ m.num(row.database) }}</td><td class="dk-num">{{ m.num(row.revisions) }}</td><td class="dk-num">{{ m.num(row.backups) }}</td><td class="dk-num">{{ m.num(row.logs) }}</td><td class="dk-num">{{ m.num(row.files ?? 0) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="light">{{ 'Every measurement of the last {n} days is kept, also several on one day; of older days the last one.'|t('data-keeper', { n: recentDays }) }}</p>
       </section>
     {% endif %}
 

@@ -33,6 +33,8 @@ class DefaultController extends Controller
             'measured' => $last !== null,
             'limits' => $plugin->measurements->limits(),
             'history' => Growth::byMonth($history),
+            'recent' => $plugin->measurements->recent(10),
+            'recentDays' => $plugin->measurements::RECENT_DAYS,
             'conditions' => $plugin->notifications->conditions(),
             'canMeasure' => Craft::$app->getUser()->checkPermission(DataKeeper::PERMISSION_MEASURE),
             'canCleanup' => Craft::$app->getUser()->checkPermission(DataKeeper::PERMISSION_CLEANUP),
@@ -58,8 +60,11 @@ class DefaultController extends Controller
         if ($last) {
             $variables += $last;
             $variables['growth'] = $plugin->measurements->growth($last);
-            foreach ($last['figures'] as $key => $value) {
-                $variables['levels'][$key] = Levels::forValue($variables['limits'][$key] ?? null, $value);
+            foreach ($variables['limits'] as $key => $limit) {
+                // a figure that is newer than the stored measurement has no value yet: it shows as «not measured»
+                $value = $last['figures'][$key] ?? null;
+                $variables['figures'][$key] = $value;
+                $variables['levels'][$key] = $value === null ? Levels::OK : Levels::forValue($limit, $value);
             }
             $user = Craft::$app->getUser()->getIdentity();
             $variables['topRevisions'] = array_map(function(array $row) use ($user) {

@@ -7,14 +7,15 @@ use craft\base\Component;
 use pixelwerft\datakeeper\DataKeeper;
 use pixelwerft\datakeeper\maintenance\Action;
 use pixelwerft\datakeeper\maintenance\CheckTables;
+use pixelwerft\datakeeper\maintenance\ClearCaches;
 use pixelwerft\datakeeper\maintenance\ClearChangeRecords;
 use pixelwerft\datakeeper\maintenance\ClearLogs;
 use pixelwerft\datakeeper\maintenance\ClearTrash;
 use pixelwerft\datakeeper\maintenance\OptimizeTables;
 
 /**
- * The actions a person starts by hand from a key figure card (clear change records, empty the trash, clear the logs,
- * optimize and check the tables), and what the last ones did.
+ * The actions a person starts by hand from a key figure card (clear change records, empty the trash, clear the logs
+ * and the caches, optimize and check the tables), and what the last ones did.
  *
  * Nothing here runs by itself or on a schedule.
  */
@@ -177,7 +178,7 @@ class Maintenance extends Component
     private function all(): array
     {
         $byId = [];
-        foreach ([new OptimizeTables(), new CheckTables(), new ClearChangeRecords(), new ClearTrash(), new ClearLogs()] as $action) {
+        foreach ([new OptimizeTables(), new CheckTables(), new ClearChangeRecords(), new ClearTrash(), new ClearLogs(), new ClearCaches()] as $action) {
             $byId[$action->id()] = $action;
         }
         return $byId;

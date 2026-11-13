@@ -50,6 +50,25 @@ final class Growth
         return array_slice(array_reverse(array_values($perMonth)), 0, $months);
     }
 
+    /**
+     * Adds a measurement to the list of single measurements. Unlike the course (one entry per day) the list keeps
+     * every measurement, also several on one day – but only of the last $days days and at most $max of them, so it
+     * stays small however often someone measures.
+     *
+     * @param array<string, array<string, int|float>> $recent time (ISO 8601) => figures
+     * @param string $at the time of the new measurement (ISO 8601)
+     * @param array<string, int|float> $figures
+     * @return array<string, array<string, int|float>> oldest first
+     */
+    public static function addRecent(array $recent, string $at, array $figures, int $days = 31, int $max = 200): array
+    {
+        $recent[$at] = $figures;
+        $cutoff = strtotime($at) - max(1, $days) * 86400;
+        $recent = array_filter($recent, fn($time) => strtotime($time) >= $cutoff, ARRAY_FILTER_USE_KEY);
+        uksort($recent, fn($a, $b) => strtotime($a) <=> strtotime($b));
+        return array_slice($recent, -max(1, $max), null, true);
+    }
+
     /** Drops history entries older than $days days before $today (Y-m-d). */
     public static function prune(array $history, string $today, int $days): array
     {

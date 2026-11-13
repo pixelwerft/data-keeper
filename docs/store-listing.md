@@ -44,8 +44,9 @@ of retention periods in your privacy policy.
 - **Clear saved versions per entry** – keep the newest N, optionally the very first one, optionally only by age.
 - **Actions on the cards** – clear the change records, empty the trash, clear the logs, delete single backup files,
   optimize and check the database tables. Each says what it would do and only runs after you confirm.
-- **Remote queries** – read the figures as JSON from outside, for example for a dashboard that watches several sites.
-  Off by default; access needs the key of the site.
+- **Remote queries** – read the figures, the versions of Craft, PHP, the database and the plugins and the available
+  updates as JSON from outside, for example for a dashboard that watches several sites. Off by default; access needs
+  the key of the site.
 - **Notifications** – as a notice in the control panel, by e-mail or webhook, and at a status endpoint for monitoring
   tools.
 - **For your privacy policy** – the retention periods of all active rules, ready to copy.

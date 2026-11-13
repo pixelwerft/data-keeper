@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.4.0 - 2026-11-13
+
+### Added
+- A key figure «Cache» on the overview: the size of Craft’s data cache (when it is kept in files), the compiled
+  templates and the compiled classes, with a button that clears them. It shows «Not measured yet» until the next
+  measurement.
+- Every measurement of the last 31 days is kept and listed under «Last measurements» on the overview, also several on
+  one day. Before, a second measurement on the same day took the place of the first. The course still shows the last
+  measurement of each month.
+
+### Changed
+- Remote queries answer with a new structure (`schema` 2): `lastMeasurement` with the key figures of the last
+  measurement, and `craftCms` with the versions of Craft, PHP, the database and the plugins and the updates that are
+  available. What the answer held before is still there with `?details=1`, under `details`.
+- The address for remote queries always answers with JSON, also when something is wrong: 403 `disabled` while «Allow
+  remote queries» is switched off (before: a 404 page of the site), 401 `unauthorized` without the right key.
+
 ## 1.3.0 - 2026-11-13
 
 ### Added

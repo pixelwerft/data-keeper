@@ -14,7 +14,7 @@ use pixelwerft\datakeeper\helpers\Levels;
 
 /**
  * Measures how much the site stores – database, saved versions, change records, deleted elements, backups, logs,
- * temporary files and local file volumes – and keeps the last measurement and one set of key figures per day.
+ * caches, temporary files and local file volumes – and keeps the last measurement and one set of key figures per day.
  *
  * Measuring is never automatic: it runs when someone clicks «Measure now», or from the console command or the queue
  * job (for example daily from a cron job).
@@ -33,7 +33,11 @@ class Measurements extends Component
         'deleted' => ['icon' => 'trash', 'label' => 'Deleted elements (in the trash)', 'unit' => '', 'warn' => 2000, 'alert' => 10000],
         'backups' => ['icon' => 'backups', 'label' => 'Backups', 'unit' => 'MB', 'warn' => 2000, 'alert' => 5000],
         'logs' => ['icon' => 'logs', 'label' => 'Logs', 'unit' => 'MB', 'warn' => 300, 'alert' => 1000],
+        'cache' => ['icon' => 'cache', 'label' => 'Cache', 'unit' => 'MB', 'warn' => 500, 'alert' => 2000],
     ];
+
+    /** For how many days every single measurement is kept (older days keep the last one, in the course). */
+    public const RECENT_DAYS = 31;
 
     /**
      * The key figures with their limits (defaults overridden by the settings).
@@ -58,7 +62,7 @@ class Measurements extends Component
 
     /**
      * Measures everything (counting files takes a moment on big sites) and stores it as the last measurement. The
-     * key figures also go into the history, one entry per day.
+     * key figures also go into the list of single measurements and into the course, which has one entry per day.
      *
      * @return array<string, mixed>
      */
@@ -73,6 +77,7 @@ class Measurements extends Component
             : 0;
 
         $topRevisions = $plugin->versions->top(5);
+        $cache = $this->cacheSize();
         $figures = [
             'database' => round(array_sum(array_column($tables, 'mb')), 1),
             'revisions' => $count(Table::REVISIONS),
@@ -81,6 +86,7 @@ class Measurements extends Component
             'deleted' => $count(Table::ELEMENTS, ['not', ['dateDeleted' => null]]),
             'backups' => $folders['backups']['mb'] ?? 0,
             'logs' => $folders['logs']['mb'] ?? 0,
+            'cache' => $cache['mb'],
         ];
 
         $general = Craft::$app->getConfig()->getGeneral();
@@ -94,6 +100,7 @@ class Measurements extends Component
                 'mb' => round(array_sum(array_column($tables, 'mb')), 1),
             ],
             'folders' => $folders,
+            'cache' => $cache,
             'topRevisions' => $topRevisions,
             'versionAge' => ['year1' => $plugin->versions->olderThan(365), 'year2' => $plugin->versions->olderThan(730)],
             'backlog' => $plugin->cleanup->backlog(),
@@ -118,6 +125,14 @@ class Measurements extends Component
         $keepDays = $plugin->getSettings()->historyDays;
         $plugin->store->update(function(array $data) use ($result, $dailyFigures, $keepDays) {
             $history = $data['history'] ?? [];
+            // every measurement on its own, also several on one day; the first time, the list starts with the
+            // measurement before this one, so there is something to compare with at once
+            $recent = $data['recent'] ?? [];
+            if (!$recent && isset($data['last']['measuredAt'], $data['last']['date'])) {
+                $recent[$data['last']['measuredAt']] = $history[$data['last']['date']] ?? $data['last']['figures'];
+            }
+            $data['recent'] = Growth::addRecent($recent, $result['measuredAt'], $dailyFigures, self::RECENT_DAYS);
+            // the course: one entry per day, a later measurement of the same day takes the place of the earlier one
             $history[$result['date']] = $dailyFigures;
             ksort($history);
             $data['history'] = Growth::prune($history, $result['date'], $keepDays);
@@ -191,6 +206,10 @@ class Measurements extends Component
             if ($date !== null && isset($data['history'][$date])) {
                 $data['history'][$date] = array_merge($data['history'][$date], $figures);
             }
+            $at = $data['last']['measuredAt'] ?? null;
+            if ($at !== null && isset($data['recent'][$at])) {
+                $data['recent'][$at] = array_merge($data['recent'][$at], $figures);
+            }
             return $data;
         });
     }
@@ -207,6 +226,22 @@ class Measurements extends Component
         $history = DataKeeper::$plugin->store->get('history', []);
         ksort($history);
         return $history;
+    }
+
+    /**
+     * The single measurements of the last days, newest first – also several of one day.
+     *
+     * @return array<int, array<string, mixed>> rows with the extra key `at` (ISO 8601)
+     */
+    public function recent(?int $limit = null): array
+    {
+        $recent = DataKeeper::$plugin->store->get('recent', []);
+        uksort($recent, fn($a, $b) => strtotime($b) <=> strtotime($a));
+        $rows = [];
+        foreach ($recent as $at => $figures) {
+            $rows[] = ['at' => $at] + $figures;
+        }
+        return $limit === null ? $rows : array_slice($rows, 0, $limit);
     }
 
     /** @return array{since: ?string, values: array<string, ?float>} */
@@ -304,6 +339,25 @@ class Measurements extends Component
             $folders[$key] = ['label' => $label, 'name' => $name, 'path' => $this->relative($folder)] + $this->size($folder);
         }
         return $folders;
+    }
+
+    /**
+     * How much the caches on disk hold: Craft's data cache (when it is kept in files), the compiled templates and the
+     * compiled classes. They are part of the «Temporary files» folder too; this is their share of it.
+     *
+     * @return array{mb: float, files: int}
+     */
+    public function cacheSize(): array
+    {
+        $path = Craft::$app->getPath();
+        $mb = 0;
+        $files = 0;
+        foreach ([$path->getCachePath(false), $path->getCompiledTemplatesPath(false), $path->getCompiledClassesPath(false)] as $folder) {
+            $size = $this->size($folder);
+            $mb += $size['mb'];
+            $files += $size['files'];
+        }
+        return ['mb' => round($mb, 1), 'files' => $files];
     }
 
     /** @return array{mb: float, files: int, oldest: ?int, newest: ?int} timestamps as Unix time */

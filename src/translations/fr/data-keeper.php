@@ -330,4 +330,11 @@ return [
     '{n} saved versions were deleted.' => '{n} versions enregistrées ont été supprimées.',
     '«{file}» could not be deleted.' => '« {file} » n’a pas pu être supprimé.',
     '«{file}» was deleted.' => '« {file} » a été supprimé.',
+    'Last measurements' => 'Dernières mesures',
+    'Every measurement of the last {n} days is kept, also several on one day; of older days the last one.' => 'Chaque mesure des {n} derniers jours est conservée, même plusieurs le même jour ; pour les jours plus anciens, la dernière.',
+    'Cache' => 'Cache',
+    'Clear the caches' => 'Vider les caches',
+    'Clears Craft’s data cache, the compiled templates and the compiled classes, as the «Caches» utility of Craft does for these three. Nothing is lost: Craft builds them again when they are needed, so the next page views take a little longer. The size on the card counts the cache files on disk; a cache that lives elsewhere (Redis, the database) is cleared too but not counted.' => 'Vide le cache de données de Craft, les modèles compilés et les classes compilées, comme le fait l’utilitaire « Caches » de Craft pour ces trois éléments. Rien n’est perdu : Craft les reconstruit au besoin, les prochains affichages de page prennent donc un peu plus de temps. La taille indiquée sur la carte compte les fichiers de cache sur le disque ; un cache situé ailleurs (Redis, base de données) est vidé lui aussi, mais n’est pas compté.',
+    'The caches were cleared.' => 'Les caches ont été vidés.',
+    'Not measured yet' => 'Pas encore mesuré',
 ];

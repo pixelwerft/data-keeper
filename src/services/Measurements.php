@@ -21,21 +21,24 @@ use pixelwerft\datakeeper\helpers\Levels;
  */
 class Measurements extends Component
 {
-    /** From these values on a figure is at the level «warn» or «alert». Labels are translated where shown. */
+    /**
+     * From these values on a figure is at the level «warn» or «alert». Labels are translated where shown; `icon` is the
+     * name of a file in `src/icons`.
+     */
     public const FIGURES = [
-        'database' => ['label' => 'Database', 'unit' => 'MB', 'warn' => 1000, 'alert' => 2000],
-        'revisions' => ['label' => 'Saved versions', 'unit' => '', 'warn' => 25000, 'alert' => 50000],
-        'maxRevisions' => ['label' => 'Most versions of one entry', 'unit' => '', 'warn' => 50, 'alert' => 100],
-        'changedFields' => ['label' => 'Change records (rows)', 'unit' => '', 'warn' => 500000, 'alert' => 1000000],
-        'deleted' => ['label' => 'Deleted elements (in the trash)', 'unit' => '', 'warn' => 2000, 'alert' => 10000],
-        'backups' => ['label' => 'Backups', 'unit' => 'MB', 'warn' => 2000, 'alert' => 5000],
-        'logs' => ['label' => 'Logs', 'unit' => 'MB', 'warn' => 300, 'alert' => 1000],
+        'database' => ['icon' => 'database', 'label' => 'Database', 'unit' => 'MB', 'warn' => 1000, 'alert' => 2000],
+        'revisions' => ['icon' => 'saved-versions', 'label' => 'Saved versions', 'unit' => '', 'warn' => 25000, 'alert' => 50000],
+        'maxRevisions' => ['icon' => 'versions-per-entry', 'label' => 'Most versions of one entry', 'unit' => '', 'warn' => 50, 'alert' => 100],
+        'changedFields' => ['icon' => 'changelog', 'label' => 'Change records (rows)', 'unit' => '', 'warn' => 500000, 'alert' => 1000000],
+        'deleted' => ['icon' => 'trash', 'label' => 'Deleted elements (in the trash)', 'unit' => '', 'warn' => 2000, 'alert' => 10000],
+        'backups' => ['icon' => 'backups', 'label' => 'Backups', 'unit' => 'MB', 'warn' => 2000, 'alert' => 5000],
+        'logs' => ['icon' => 'logs', 'label' => 'Logs', 'unit' => 'MB', 'warn' => 300, 'alert' => 1000],
     ];
 
     /**
      * The key figures with their limits (defaults overridden by the settings).
      *
-     * @return array<string, array{label: string, unit: string, warn: int|float, alert: int|float}>
+     * @return array<string, array{icon: string, label: string, unit: string, warn: int|float, alert: int|float}>
      */
     public function limits(): array
     {

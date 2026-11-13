@@ -60,7 +60,11 @@
         {% set level = levels[key] %}
         {% set unit = limit.unit ? ' ' ~ limit.unit : '' %}
         <li class="dk-card dk-card-{{ level }}">
-          <span class="dk-label">{{ limit.label|t('data-keeper') }}</span>
+          <span class="dk-card-head">
+            {# decorative: the label next to it says what the figure is #}
+            <span class="dk-icon" aria-hidden="true">{{ svg('@pixelwerft/datakeeper/icons/' ~ limit.icon ~ '.svg') }}</span>
+            <span class="dk-label">{{ limit.label|t('data-keeper') }}</span>
+          </span>
           <strong class="dk-value">{{ m.num(value) }}{% if limit.unit %} <small>{{ limit.unit }}</small>{% endif %}</strong>
           <span class="dk-level">{{ m.level(level) }}</span>
           <span class="dk-growth">

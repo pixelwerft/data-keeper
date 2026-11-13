@@ -6,12 +6,14 @@ use Craft;
 use craft\base\Model;
 use craft\base\Plugin;
 use craft\events\RegisterCpAlertsEvent;
+use craft\events\RegisterCpNavItemsEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\helpers\Cp;
 use craft\helpers\FileHelper;
 use craft\helpers\UrlHelper;
 use craft\services\UserPermissions;
+use craft\web\twig\variables\Cp as CpVariable;
 use craft\web\UrlManager;
 use pixelwerft\datakeeper\models\Settings;
 use pixelwerft\datakeeper\services\Cleanup;
@@ -68,6 +70,7 @@ class DataKeeper extends Plugin
         $this->registerUrlRules();
         $this->registerPermissions();
         $this->registerCpAlert();
+        $this->registerNavPosition();
     }
 
     public static function t(string $message, array $params = []): string
@@ -161,6 +164,40 @@ class DataKeeper extends Plugin
             if ($alert !== null) {
                 $event->alerts[] = $alert;
             }
+        });
+    }
+
+    /**
+     * Moves the section to the bottom of the sidebar, below Plugin Store, next to the other housekeeping tools: directly
+     * before User Audit when it is installed (whichever plugin's handler runs first), otherwise at the very end.
+     * `hasCpSection` stays on, so Craft still builds the item and checks the access permission.
+     */
+    private function registerNavPosition(): void
+    {
+        Event::on(CpVariable::class, CpVariable::EVENT_REGISTER_CP_NAV_ITEMS, function(RegisterCpNavItemsEvent $event) {
+            $items = $event->navItems;
+            $own = null;
+            foreach ($items as $i => $item) {
+                if (($item['url'] ?? null) === $this->id) {
+                    $own = $item;
+                    unset($items[$i]);
+                    break;
+                }
+            }
+            if ($own === null) {
+                return;
+            }
+
+            $items = array_values($items);
+            $position = count($items);
+            foreach ($items as $i => $item) {
+                if (($item['url'] ?? null) === 'user-audit') {
+                    $position = $i;
+                    break;
+                }
+            }
+            array_splice($items, $position, 0, [$own]);
+            $event->navItems = $items;
         });
     }
 }

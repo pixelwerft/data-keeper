@@ -18,3 +18,4 @@
 - [x] Screenshots (overview, cleanup, versions, settings) with made-up data
 - [x] First commit pushed to GitHub, `v1.0.0` tagged (2026-11-13)
 - [x] Icons on the key figure cards of the overview, released as `v1.1.0` (2026-11-13)
+- [x] Translations fr, it, released as `v1.2.0` (2026-11-13)

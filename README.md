@@ -47,7 +47,8 @@ The screenshots show made-up figures from a test install.
   finished or failed, old data is waiting). Each is available as a **notice in the control panel**, as a **message
   pushed out** (e-mail, webhook) and at a **status endpoint** a monitoring tool can poll.
 - **For your privacy policy** – the page lists the retention periods of all rules that are on, ready to copy.
-- Console commands, an optional queue job, a permission, English and German (`de`, `de-CH`) interface.
+- Console commands, an optional queue job, a permission. Interface in English, German (`de`, `de-CH`), French and
+  Italian.
 
 ## Requirements
 
@@ -221,7 +222,8 @@ queue job `pixelwerft\datakeeper\jobs\RunJob` can be pushed by whatever schedule
 
 ## Translations
 
-English (source) and German: `de` and `de-CH` (Swiss spelling). To add a language, copy
+English (source), German (`de`, and `de-CH` for Swiss spelling), French (`fr`) and Italian (`it`). The control panel
+shows the language of the signed-in user. To add a language, copy
 `src/translations/de/data-keeper.php` to `src/translations/<language>/` and translate the values. You can also
 override any string for your site in `translations/<language>/data-keeper.php` in your project.
 

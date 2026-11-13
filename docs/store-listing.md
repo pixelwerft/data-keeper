@@ -45,7 +45,7 @@ of retention periods in your privacy policy.
 - **Notifications** – as a notice in the control panel, by e-mail or webhook, and at a status endpoint for monitoring
   tools.
 - **For your privacy policy** – the retention periods of all active rules, ready to copy.
-- Console commands, a queue job, permissions, English and German interface.
+- Console commands, a queue job, permissions. Interface in English, German, French and Italian.
 
 ### Requirements
 

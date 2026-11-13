@@ -101,8 +101,17 @@ class Settings extends Model
     // Remote queries – off until switched on
     // -------------------------------------------------------------------------
 
-    /** @var bool Answer remote queries for the stored measurement (`/actions/data-keeper/remote`, needs the key of the site). */
-    public bool $allowRemote = false;
+    /**
+     * @var bool|string Answer remote queries (`/actions/data-keeper/remote`, needs the key of the site). A string is
+     * allowed so that an environment variable can be named; what it means is decided in {@see remoteAllowed()}.
+     */
+    public bool|string $allowRemote = false;
+
+    /**
+     * @var bool Also answer remote queries over plain HTTP. Only for a site behind a proxy that ends HTTPS and does
+     * not tell Craft so; set it in `config/data-keeper.php`. While dev mode is on, HTTP is allowed anyway.
+     */
+    public bool $remoteAllowHttp = false;
 
     /**
      * The limits of a key figure: the defaults overridden by the settings.
@@ -117,6 +126,16 @@ class Settings extends Model
             'warn' => is_numeric($own['warn'] ?? null) ? $own['warn'] + 0 : $default['warn'],
             'alert' => is_numeric($own['alert'] ?? null) ? $own['alert'] + 0 : $default['alert'],
         ];
+    }
+
+    /**
+     * Whether remote queries are switched on. Only a clear yes counts: `true`, `'1'`, `'true'`, `'on'`, `'yes'`, or an
+     * environment variable with one of these. Anything else – `'false'`, an empty or unknown value – means no, so a
+     * typing mistake in a config file cannot open the address.
+     */
+    public function remoteAllowed(): bool
+    {
+        return App::parseBooleanEnv($this->allowRemote) === true;
     }
 
     /** @return string[] */

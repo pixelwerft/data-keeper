@@ -21,6 +21,8 @@ class CleanupController extends Controller
         if (!parent::beforeAction($action)) {
             return false;
         }
+        // the section itself first: the cleanup permission alone does not open its pages
+        $this->requirePermission(DataKeeper::PERMISSION_ACCESS);
         $this->requirePermission(DataKeeper::PERMISSION_CLEANUP);
         return true;
     }

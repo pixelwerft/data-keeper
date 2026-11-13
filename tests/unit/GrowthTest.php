@@ -106,4 +106,41 @@ class GrowthTest extends TestCase
 
         $this->assertSame(['2026-11-13T07:30:00+00:00', '2026-11-13T09:00:00+01:00'], array_keys($recent));
     }
+
+    public function testRemoveRecentPutsTheLatestMeasurementLeftOfThatDayIntoTheCourse(): void
+    {
+        $recent = [
+            '2026-11-13T09:00:00+01:00' => ['database' => 683.0],
+            '2026-11-13T09:05:00+01:00' => ['database' => 650.0],
+            '2026-11-13T17:30:00+01:00' => ['database' => 640.0],
+        ];
+        $history = ['2026-11-12' => ['database' => 700.0], '2026-11-13' => ['database' => 640.0]];
+
+        $result = Growth::removeRecent($recent, $history, '2026-11-13T17:30:00+01:00');
+
+        $this->assertSame(['2026-11-13T09:00:00+01:00', '2026-11-13T09:05:00+01:00'], array_keys($result['recent']));
+        $this->assertSame(650.0, $result['history']['2026-11-13']['database']);
+        $this->assertSame(700.0, $result['history']['2026-11-12']['database']);
+    }
+
+    public function testRemoveRecentDropsTheDayFromTheCourseWhenNothingIsLeftOfIt(): void
+    {
+        $recent = [
+            '2026-11-12T08:00:00+01:00' => ['database' => 700.0],
+            '2026-11-13T09:00:00+01:00' => ['database' => 683.0],
+        ];
+        $history = ['2026-11-12' => ['database' => 700.0], '2026-11-13' => ['database' => 683.0]];
+
+        $result = Growth::removeRecent($recent, $history, '2026-11-12T08:00:00+01:00');
+
+        $this->assertSame(['2026-11-13T09:00:00+01:00'], array_keys($result['recent']));
+        $this->assertSame(['2026-11-13'], array_keys($result['history']));
+    }
+
+    public function testRemoveRecentOfAnUnknownMeasurementChangesNothing(): void
+    {
+        $recent = ['2026-11-13T09:00:00+01:00' => ['database' => 683.0]];
+
+        $this->assertNull(Growth::removeRecent($recent, ['2026-11-13' => ['database' => 683.0]], '2026-11-13T10:00:00+01:00'));
+    }
 }

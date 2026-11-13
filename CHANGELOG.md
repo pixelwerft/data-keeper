@@ -4,6 +4,38 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.5.0 - 2026-11-13
+
+### Security
+- A valid key for remote queries (and a status token) could be written to Craft’s log: Craft logs the request with
+  every warning and error – and with everything while dev mode is on – and does not mask the `Authorization` header.
+  The key is now taken out of the request before anything is logged, and the two addresses for tools no longer throw.
+  **Replace the key on the «Information» tab after updating**, and the status token if you use one.
+- Remote queries take the key from a header only (`X-Data-Keeper-Key` or `Authorization: Bearer`). `?key=` is no
+  longer accepted: an address ends up in the logs of web servers and proxies.
+- Remote queries are only answered over HTTPS (403 `https_required` otherwise; HTTP stays possible while dev mode is
+  on or with `remoteAllowHttp` in the config file) and only to GET (405 otherwise).
+- The key is kept in a file of its own that only the web server’s user may read (`storage/data-keeper/remote-key.json`,
+  mode 0600), no longer in the file with the measurements. An existing key is moved over.
+- «A new key was generated» is only shown when the new key is really stored; if not, the page says that the old one
+  still works.
+- `allowRemote` only counts as on for a clear yes. Before, a string like `'false'` in a config file switched it on.
+- A query parameter sent as an array (`?key[]=…`) no longer causes a server error on the two addresses for tools.
+- The answers of both addresses carry `Cache-Control: no-store, private` and `X-Content-Type-Options: nosniff`.
+
+### Added
+- Admins can delete single measurements from «Last measurements» (not the latest one, which the overview shows).
+
+### Changed
+- The status endpoint takes its token from a header or from `?statusToken=`. The documented `?token=` never worked:
+  Craft keeps that name for its own tokens and refuses the request. Its problems are answered as JSON too.
+- The file with the measurements is replaced in one step when it changes, so a crash while writing cannot leave half
+  a file.
+
+### Fixed
+- The cleanup page, the actions of the cards, the backup files and clearing saved versions now also need the
+  permission to access Data Keeper. Before, the cleanup permission alone opened them by their address.
+
 ## 1.4.0 - 2026-11-13
 
 ### Added

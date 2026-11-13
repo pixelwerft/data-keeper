@@ -222,14 +222,30 @@
       <section>
         <h2>{{ 'Last measurements'|t('data-keeper') }}</h2>
         <table class="data fullwidth">
-          <thead><tr><th>{{ 'Date'|t('data-keeper') }}</th><th class="dk-num">{{ 'Database MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Versions'|t('data-keeper') }}</th><th class="dk-num">{{ 'Backups MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Logs MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Files MB'|t('data-keeper') }}</th></tr></thead>
+          <thead><tr><th>{{ 'Date'|t('data-keeper') }}</th><th class="dk-num">{{ 'Database MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Versions'|t('data-keeper') }}</th><th class="dk-num">{{ 'Backups MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Logs MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Files MB'|t('data-keeper') }}</th>{% if currentUser.admin %}<th></th>{% endif %}</tr></thead>
           <tbody>
             {% for row in recent %}
-              <tr><td>{{ row.at|datetime('short') }}</td><td class="dk-num">{{ m.num(row.database) }}</td><td class="dk-num">{{ m.num(row.revisions) }}</td><td class="dk-num">{{ m.num(row.backups) }}</td><td class="dk-num">{{ m.num(row.logs) }}</td><td class="dk-num">{{ m.num(row.files ?? 0) }}</td></tr>
+              <tr>
+                <td>{{ row.at|datetime('short') }}</td><td class="dk-num">{{ m.num(row.database) }}</td><td class="dk-num">{{ m.num(row.revisions) }}</td><td class="dk-num">{{ m.num(row.backups) }}</td><td class="dk-num">{{ m.num(row.logs) }}</td><td class="dk-num">{{ m.num(row.files ?? 0) }}</td>
+                {% if currentUser.admin %}
+                  <td class="dk-num">
+                    {# the latest measurement is what the overview shows: it stays until the site is measured again #}
+                    {% if row.at != measuredAt %}
+                      <form method="post" accept-charset="UTF-8" class="dk-inline-form" onsubmit="return confirm('{{ 'Really delete the measurement of {date}? This cannot be undone.'|t('data-keeper', { date: row.at|datetime('short') })|e('js') }}');">
+                        {{ csrfInput() }}
+                        {{ actionInput('data-keeper/default/delete-measurement') }}
+                        <input type="hidden" name="at" value="{{ row.at }}">
+                        <button type="submit" class="btn small" data-icon="trash" title="{{ 'Delete'|t('data-keeper') }}" aria-label="{{ 'Delete the measurement of {date}'|t('data-keeper', { date: row.at|datetime('short') }) }}"></button>
+                      </form>
+                    {% endif %}
+                  </td>
+                {% endif %}
+              </tr>
             {% endfor %}
           </tbody>
         </table>
-        <p class="light">{{ 'Every measurement of the last {n} days is kept, also several on one day; of older days the last one.'|t('data-keeper', { n: recentDays }) }}</p>
+        <p class="light">{{ 'Every measurement of the last {n} days is kept, also several on one day; of older days the last one.'|t('data-keeper', { n: recentDays }) }}
+          {% if currentUser.admin %}{{ 'The latest measurement cannot be deleted; measure again to replace it.'|t('data-keeper') }}{% endif %}</p>
       </section>
     {% endif %}
 
@@ -285,6 +301,9 @@
             <a href="{{ cpUrl('settings/plugins/data-keeper') }}">{{ 'Open the settings'|t('data-keeper') }}</a>
           {% endif %}
         </p>
+        {% if remote.insecure %}
+          <p class="error">{{ 'The address does not start with https://. Remote queries are refused over plain HTTP, because the key and the answer would travel unprotected.'|t('data-keeper') }}</p>
+        {% endif %}
         {% if remote.key == '' %}
           <p class="error">{{ 'The key could not be stored. Check that the storage folder is writable.'|t('data-keeper') }}</p>
         {% else %}
@@ -300,13 +319,13 @@
           {{ forms.copytextField({
             label: 'Example'|t('data-keeper'),
             id: 'dk-remote-example', class: 'code', size: 72,
-            value: 'curl -H "Authorization: Bearer ' ~ remote.key ~ '" "' ~ remote.url ~ '"',
+            value: 'curl -H "X-Data-Keeper-Key: ' ~ remote.key ~ '" "' ~ remote.url ~ '"',
           }) }}
           <form method="post" accept-charset="UTF-8" class="dk-actions">
             {{ csrfInput() }}
             {{ actionInput('data-keeper/default/reset-remote-key') }}
             <button type="button" class="btn small formsubmit" data-confirm="{{ 'Generate a new key? The current one stops working at once; every tool that uses it needs the new one.'|t('data-keeper') }}">{{ 'Generate a new key'|t('data-keeper') }}</button>
-            <span class="light">{{ 'The key is kept in the plugin’s file in storage, not in the project config. Treat it like a password.'|t('data-keeper') }}</span>
+            <span class="light">{{ 'The key is kept in a file of its own in storage that only the web server may read, not in the project config. Treat it like a password: it is sent in a header, never in the address.'|t('data-keeper') }}</span>
           </form>
         {% endif %}
       </section>

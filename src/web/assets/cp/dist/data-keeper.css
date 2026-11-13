@@ -91,4 +91,4 @@
 .dk-dialog-title { margin: 0 0 12px; }
 .dk-dialog-loading { min-height: 140px; opacity: .5; }
 .dk-dialog .dk-run { margin-bottom: 0; }
-.dk-files form { margin: 0; }
+.dk-files form, .dk-inline-form { margin: 0; }

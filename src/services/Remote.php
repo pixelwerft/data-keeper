@@ -5,6 +5,7 @@ namespace pixelwerft\datakeeper\services;
 use Craft;
 use craft\base\Component;
 use craft\helpers\App;
+use craft\helpers\FileHelper;
 use craft\helpers\UrlHelper;
 use craft\models\Update;
 use craft\models\UpdateRelease;
@@ -17,8 +18,9 @@ use pixelwerft\datakeeper\helpers\Levels;
  * that are waiting) as JSON for a tool outside the site – a dashboard that watches several sites, for example.
  *
  * Off until «Allow remote queries» is switched on in the settings. Access needs the key of the site: a random string
- * that is generated once, kept in the plugin's file in `storage/` (not in the project config, so it does not end up
- * in Git) and stays the same until someone resets it.
+ * that is generated once and stays the same until someone replaces it. It is kept in a small file of its own in
+ * `storage/` that only the web server's user may read – not in the project config (which usually lives in Git) and
+ * not in the file with the measurements.
  */
 class Remote extends Component
 {
@@ -26,42 +28,59 @@ class Remote extends Component
     public const SCHEMA = 2;
 
     private const KEY_LENGTH = 48;
+    private const KEY_FILE = 'remote-key.json';
 
+    /** @var array{key?: string, createdAt?: string}|null what the key file holds, once it was read */
+    private ?array $stored = null;
+
+    /** Whether remote queries are allowed. Only an explicit «on» counts: anything unclear means no. */
     public function enabled(): bool
     {
-        return DataKeeper::$plugin->getSettings()->allowRemote;
+        return DataKeeper::$plugin->getSettings()->remoteAllowed();
     }
 
-    /** The key of the site. Generated and stored the first time it is asked for. */
+    /**
+     * Whether a query may come over plain HTTP, where the key and the answer travel unprotected. Only while dev mode
+     * is on, or if the config file says so (for a site behind a proxy that does not pass on that the request was
+     * secure).
+     */
+    public function httpAllowed(): bool
+    {
+        return Craft::$app->getConfig()->getGeneral()->devMode || DataKeeper::$plugin->getSettings()->remoteAllowHttp;
+    }
+
+    /**
+     * The key of the site. Generated and stored the first time it is asked for; empty if it could not be stored (a
+     * key that is not stored would never match, so it is not handed out).
+     */
     public function key(): string
     {
         $key = $this->storedKey();
         if ($key !== '') {
             return $key;
         }
-        // under the store's lock: two requests at the same moment end up with the same key
-        DataKeeper::$plugin->store->update(function(array $data) use (&$key) {
-            if (empty($data['remote']['key'])) {
-                $data['remote'] = $this->newKey();
-            }
-            $key = (string)$data['remote']['key'];
-            return $data;
-        });
-        return $key;
+        // under a lock: two requests at the same moment end up with the same key
+        return $this->locked(function() {
+            $this->stored = null;
+            $key = $this->storedKey();
+            return $key !== '' || $this->write($this->newKey()) ? $this->storedKey() : '';
+        }) ?? '';
     }
 
-    /** Replaces the key by a new one. The old one stops working at once. */
-    public function resetKey(): string
+    /**
+     * Replaces the key by a new one. The old one stops working at once.
+     *
+     * @return bool whether the new key is stored; if not, the old one still works
+     */
+    public function resetKey(): bool
     {
-        $remote = $this->newKey();
-        DataKeeper::$plugin->store->set('remote', $remote);
-        return $this->storedKey();
+        return $this->locked(fn() => $this->write($this->newKey())) ?? false;
     }
 
     /** When the current key was generated (null: there is none yet). */
     public function keyCreatedAt(): ?string
     {
-        return DataKeeper::$plugin->store->get('remote')['createdAt'] ?? null;
+        return $this->stored()['createdAt'] ?? null;
     }
 
     /** Whether $given is the key of the site. Never generates one: without a stored key nothing matches. */
@@ -250,7 +269,104 @@ class Remote extends Component
 
     private function storedKey(): string
     {
-        return (string)(DataKeeper::$plugin->store->get('remote')['key'] ?? '');
+        return (string)($this->stored()['key'] ?? '');
+    }
+
+    private function keyFile(): string
+    {
+        return dirname(DataKeeper::$plugin->store->path()) . DIRECTORY_SEPARATOR . self::KEY_FILE;
+    }
+
+    /**
+     * What the key file holds. Versions before 1.5 kept the key in the file with the measurements: it is moved over
+     * the first time, so that file no longer holds a secret.
+     *
+     * @return array{key?: string, createdAt?: string}
+     */
+    private function stored(): array
+    {
+        if ($this->stored !== null) {
+            return $this->stored;
+        }
+        $file = $this->keyFile();
+        if (is_file($file)) {
+            $data = json_decode((string)file_get_contents($file), true);
+            return $this->stored = is_array($data) ? $data : [];
+        }
+
+        $store = DataKeeper::$plugin->store;
+        $old = $store->get('remote');
+        if (is_array($old) && !empty($old['key']) && $this->write($old)) {
+            $store->update(function(array $data) {
+                unset($data['remote']);
+                return $data;
+            });
+            return $this->stored ?? [];
+        }
+        return $this->stored = [];
+    }
+
+    /**
+     * Stores the key: in a file only its owner may read and write, put in place in one step, and read back to be sure
+     * it is there.
+     *
+     * @param array{key: string, createdAt: string} $remote
+     */
+    private function write(array $remote): bool
+    {
+        $file = $this->keyFile();
+        $temp = $file . '.' . bin2hex(random_bytes(6)) . '.tmp';
+        try {
+            FileHelper::createDirectory(dirname($file));
+            // no moment in which others could read it: the file is created with the narrow rights already
+            $umask = umask(0077);
+            try {
+                $written = file_put_contents($temp, json_encode($remote, JSON_UNESCAPED_SLASHES));
+            } finally {
+                umask($umask);
+            }
+            if ($written === false || !chmod($temp, 0600) || !rename($temp, $file)) {
+                throw new \RuntimeException('not written');
+            }
+        } catch (\Throwable) {
+            @unlink($temp);
+            Craft::warning('Could not store the key for remote queries. Is the storage folder writable?', __METHOD__);
+            return false;
+        }
+
+        $data = json_decode((string)@file_get_contents($file), true);
+        $ok = is_array($data) && ($data['key'] ?? null) === $remote['key'];
+        if ($ok) {
+            $this->stored = $data;
+        }
+        return $ok;
+    }
+
+    /**
+     * Runs $work while holding the lock of the key file (null if the lock could not be taken).
+     *
+     * @template T
+     * @param callable(): T $work
+     * @return T|null
+     */
+    private function locked(callable $work): mixed
+    {
+        try {
+            FileHelper::createDirectory(dirname($this->keyFile()));
+        } catch (\Throwable) {
+            return null;
+        }
+        $lock = @fopen($this->keyFile() . '.lock', 'c');
+        if ($lock === false) {
+            return null;
+        }
+        try {
+            flock($lock, LOCK_EX);
+            return $work();
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     /** @return array{key: string, createdAt: string} */

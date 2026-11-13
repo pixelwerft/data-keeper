@@ -16,6 +16,7 @@ use craft\services\UserPermissions;
 use craft\web\twig\variables\Cp as CpVariable;
 use craft\web\UrlManager;
 use pixelwerft\datakeeper\helpers\NavPosition;
+use pixelwerft\datakeeper\helpers\RequestKey;
 use pixelwerft\datakeeper\models\Settings;
 use pixelwerft\datakeeper\services\Cleanup;
 use pixelwerft\datakeeper\services\Maintenance;
@@ -41,6 +42,8 @@ use yii\base\Event;
  */
 class DataKeeper extends Plugin
 {
+    /** The permission Craft adds for the section; every page of the plugin needs it, whatever else it needs. */
+    public const PERMISSION_ACCESS = 'accessPlugin-data-keeper';
     public const PERMISSION_MEASURE = 'data-keeper:measure';
     public const PERMISSION_CLEANUP = 'data-keeper:cleanup';
 
@@ -72,6 +75,9 @@ class DataKeeper extends Plugin
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
             $this->controllerNamespace = 'pixelwerft\\datakeeper\\console\\controllers';
+        } elseif (RequestKey::isForTools()) {
+            // a tool sent its key in a header: out of the request now, before anything can write it to a log
+            RequestKey::take();
         }
 
         $this->registerUrlRules();
@@ -136,6 +142,7 @@ class DataKeeper extends Plugin
             'overridden' => $overridden,
             'statusUrl' => UrlHelper::siteUrl(Craft::$app->getConfig()->getGeneral()->actionTrigger . '/data-keeper/status'),
             'remoteUrl' => $this->remote->url(),
+            'remoteAllowed' => $this->remote->enabled(),
         ]);
     }
 
@@ -167,7 +174,7 @@ class DataKeeper extends Plugin
     {
         Event::on(Cp::class, Cp::EVENT_REGISTER_ALERTS, function(RegisterCpAlertsEvent $event) {
             $user = Craft::$app->getUser();
-            if (!$user->checkPermission('accessPlugin-' . $this->id)) {
+            if (!$user->checkPermission(self::PERMISSION_ACCESS)) {
                 return;
             }
             $alert = $this->notifications->cpAlert();

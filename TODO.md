@@ -2,6 +2,7 @@
 
 ## Open
 
+- [ ] Statistics: a chart per key figure over time (next extension, see `ROADMAP.md`)
 - [ ] Add the plugin in the Craft Console and submit it for approval (texts: `docs/store-listing.md`)
 - [ ] Register the package on Packagist (optional for the Plugin Store, needed for `composer require`)
 
@@ -21,3 +22,4 @@
 - [x] Translations fr, it, released as `v1.2.0` (2026-11-13)
 - [x] Card actions, dialogs, remote queries, Information tab, sidebar position, released as `v1.3.0` (2026-11-13)
 - [x] Cache figure, several measurements a day, remote answer with versions and updates, released as `v1.4.0` (2026-11-13)
+- [x] Remote queries hardened, access permission on every page, deleting single measurements, released as `v1.5.0` (2026-11-13)

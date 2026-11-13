@@ -87,7 +87,8 @@ A *Data Keeper* section appears in the control panel. **Nothing is switched on a
 | *Measure the site* | Use «Measure now». |
 | *See what a cleanup would remove, run it and clear saved versions* | Open *Cleanup*, run a cleanup, clear versions of an entry, use the actions on the cards (clear, optimize, check, delete backup files). |
 
-The key for remote queries is shown to admins only, and only admins can replace it.
+Every page needs *Access Data Keeper*; the other two permissions add to it and open nothing on their own. Admins
+have all of them. The key for remote queries is shown to admins only, and only admins can replace it.
 
 Settings are for admins (*Settings → Plugins → Data Keeper*, needs `allowAdminChanges`).
 
@@ -182,8 +183,8 @@ X-Data-Keeper-Signature: sha256=<hex HMAC-SHA256 of the raw body>
 **Status endpoint.** For monitoring tools (Uptime Kuma, Better Stack, a shell script …). It is off until a token is set.
 
 ```bash
-curl -H "Authorization: Bearer $TOKEN" "https://example.com/actions/data-keeper/status"
-curl -i "https://example.com/actions/data-keeper/status?token=$TOKEN&fail=alert"   # tools that can only call a URL
+curl -H "X-Data-Keeper-Key: $TOKEN" "https://example.com/actions/data-keeper/status"
+curl -i "https://example.com/actions/data-keeper/status?statusToken=$TOKEN&fail=alert"   # tools that can only call a URL
 ```
 
 ```json
@@ -200,7 +201,8 @@ curl -i "https://example.com/actions/data-keeper/status?token=$TOKEN&fail=alert"
 
 `status` is `ok`, `warn` or `alert`. With `?fail=warn` or `?fail=alert` the HTTP status is **503** from that level on, so
 a plain «is the URL healthy» monitor raises the alarm. The endpoint only reads what was stored – it never measures – and
-answers 404 without a configured token and 401 with a wrong one. A header is safer than `?token=` (URLs end up in logs).
+answers 404 without a configured token and 401 with a wrong one, both as JSON. A header (`X-Data-Keeper-Key` or
+`Authorization: Bearer`) is safer than `?statusToken=`, because URLs end up in logs.
 
 ## Actions on the cards
 
@@ -225,13 +227,17 @@ A tool outside the site – a dashboard that watches several sites, for example 
 Switch on **Allow remote queries** in the settings (`allowRemote`); until then the address answers 403.
 
 Access needs the **key of the site**. It is generated the first time an admin opens the *Information* tab of the
-overview, where it can be copied and replaced by a new one. It is kept in the plugin’s file in `storage/`, not in the
-project config, so it does not end up in Git, differs per environment and can be replaced on a live site.
+overview, where it can be copied and replaced by a new one. It is kept in a file of its own in `storage/` that only
+the web server’s user may read – not in the project config, so it does not end up in Git, differs per environment and
+can be replaced on a live site.
 
 ```bash
-curl -H "Authorization: Bearer $KEY" "https://example.com/actions/data-keeper/remote"
-curl "https://example.com/actions/data-keeper/remote?key=$KEY"   # tools that can only call a URL
+curl -H "X-Data-Keeper-Key: $KEY" "https://example.com/actions/data-keeper/remote"
+curl -H "Authorization: Bearer $KEY" "https://example.com/actions/data-keeper/remote"   # the same
 ```
+
+The key goes in a header, never in the address: an address ends up in the logs of web servers and proxies. Queries are
+only answered over HTTPS and only to GET.
 
 The answer says what the last measurement found and what the site runs on:
 
@@ -278,20 +284,35 @@ The answer says what the last measurement found and what the site runs on:
   measurement of the last 31 days) and `history` (the last measurement of each month, or day by day with
   `&history=daily`).
 
-A header is safer than `?key=` (URLs end up in logs). If `storage/` is not persistent on your host, the key changes
-with it. The answer names the versions the site runs on and the updates it is missing, so treat the key like a
-password.
-
 The answer is always JSON, also when something is wrong:
 
 | HTTP status | `error` | When |
 | --- | --- | --- |
+| 405 | `method_not_allowed` | The request is not a GET. |
 | 403 | `disabled` | «Allow remote queries» is switched off. |
+| 403 | `https_required` | The request came over plain HTTP. |
 | 401 | `unauthorized` | The key is missing or wrong. |
 
 ```json
-{ "error": "disabled", "message": "Remote queries are not allowed on this site. Switch on «Allow remote queries» in the settings of Data Keeper.", "status": 403 }
+{ "error": "disabled", "message": "Remote queries are not allowed on this site.", "status": 403 }
 ```
+
+### Keeping it safe
+
+The answer names the versions the site runs on and the updates it is missing, so the key is worth protecting:
+
+- **Treat the key like a password.** Replace it on the *Information* tab if it may have been seen; the old one stops
+  working at once. If it could not be stored, the page says so and the old one stays valid.
+- **The key does not reach Craft’s log.** Craft writes the request with every warning and error, headers included; the
+  plugin takes the key out of the request before that can happen, and never throws on these addresses.
+- **Only a clear yes switches it on.** `allowRemote` counts as on for `true`, `'1'`, `'true'`, `'on'`, `'yes'` or an
+  environment variable with one of these; anything else means off. The switch is part of the project config: if it
+  should be on in production only, set it in `config/data-keeper.php` there.
+- **HTTPS.** Behind a proxy that ends HTTPS, Craft has to be told (trusted hosts and headers), or the request looks
+  like plain HTTP and is refused. As a last resort `'remoteAllowHttp' => true` in the config file answers over HTTP
+  too. While dev mode is on, HTTP is allowed – keep dev mode off in production, as always.
+- **Copies of the site.** Leave `storage/data-keeper/` out when you copy production to another environment, or both
+  share one key. If `storage/` is not persistent on your host, the key changes with it.
 
 ## Console commands
 
@@ -327,7 +348,7 @@ queue job `pixelwerft\datakeeper\jobs\RunJob` can be pushed by whatever schedule
   content, drafts or versions themselves, nor the records of anything that has drafts.
 - Clearing versions needs the *cleanup* permission **and** the right to view and save the entry itself.
 - A failed cleanup is logged in full in the Craft log; what is stored, shown and sent out says only that it failed.
-- The status endpoint is public: keep the token secret, prefer the header to `?token=` (URLs end up in server logs) and
+- The status endpoint is public: keep the token secret, prefer the header to `?statusToken=` (URLs end up in server logs) and
   rate-limit it at the web server if it is reachable from the internet.
 - The queue job and console command use the language of the process; the control panel uses the user’s language.
 

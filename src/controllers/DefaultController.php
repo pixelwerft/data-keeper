@@ -19,12 +19,21 @@ class DefaultController extends Controller
 {
     protected array|bool|int $allowAnonymous = false;
 
+    public function beforeAction($action): bool
+    {
+        if (!parent::beforeAction($action)) {
+            return false;
+        }
+        // every action needs access to the section; what else it needs, it asks for itself
+        $this->requirePermission(DataKeeper::PERMISSION_ACCESS);
+        return true;
+    }
+
     /**
      * The last measurement. «Measure now» is a POST (`measure`), so nothing measures by opening the page.
      */
     public function actionIndex(): Response
     {
-        $this->requirePermission('accessPlugin-data-keeper');
         $plugin = DataKeeper::$plugin;
         $last = $plugin->measurements->last();
         $history = $plugin->measurements->history();
@@ -54,6 +63,8 @@ class DefaultController extends Controller
                 'key' => $plugin->remote->key(),
                 'createdAt' => $plugin->remote->keyCreatedAt(),
                 'url' => $plugin->remote->url(),
+                // over plain HTTP a query is refused: the key and the answer would travel unprotected
+                'insecure' => !str_starts_with($plugin->remote->url(), 'https://') && !$plugin->remote->httpAllowed(),
             ];
         }
 
@@ -205,14 +216,32 @@ class DefaultController extends Controller
         return $element;
     }
 
+    /** Deletes one of the single measurements (admins; the browser asked «really?» before). */
+    public function actionDeleteMeasurement(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin(false);
+        $at = $this->request->getRequiredBodyParam('at');
+        if (is_string($at) && DataKeeper::$plugin->measurements->deleteRecent($at)) {
+            $this->setSuccessFlash(DataKeeper::t('The measurement was deleted.'));
+        } else {
+            $this->setFailFlash(DataKeeper::t('The measurement could not be deleted.'));
+        }
+        return $this->redirect('data-keeper');
+    }
+
     /** Replaces the key for remote queries by a new one (admins). The old key stops working at once. */
     public function actionResetRemoteKey(): Response
     {
         $this->requirePostRequest();
         $this->requireAdmin(false);
-        DataKeeper::$plugin->remote->resetKey();
-        $this->setSuccessFlash(DataKeeper::t('A new key was generated. The old one no longer works.'));
-        return $this->redirect('data-keeper');
+        if (DataKeeper::$plugin->remote->resetKey()) {
+            $this->setSuccessFlash(DataKeeper::t('A new key was generated. The old one no longer works.'));
+        } else {
+            // never claim the old key is gone when it is not
+            $this->setFailFlash(DataKeeper::t('The new key could not be stored, so the old one still works. Check that the storage folder is writable.'));
+        }
+        return $this->redirect('data-keeper#dk-infos');
     }
 
     /** Sends a test message through the switched-on channels (admins). */

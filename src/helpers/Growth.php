@@ -69,6 +69,34 @@ final class Growth
         return array_slice($recent, -max(1, $max), null, true);
     }
 
+    /**
+     * Takes one measurement out of the list of single measurements and brings the course in line: the entry of that
+     * day becomes the latest measurement that is left of it, or goes if none is left.
+     *
+     * @param array<string, array<string, int|float>> $recent time (ISO 8601) => figures
+     * @param array<string, array<string, int|float>> $history date => figures
+     * @param string $at the time of the measurement to remove; its first ten characters are its day
+     * @return array{recent: array<string, array<string, int|float>>, history: array<string, array<string, int|float>>}|null
+     *         null if there is no such measurement
+     */
+    public static function removeRecent(array $recent, array $history, string $at): ?array
+    {
+        if (!isset($recent[$at])) {
+            return null;
+        }
+        unset($recent[$at]);
+
+        $day = substr($at, 0, 10);
+        $left = array_filter($recent, fn($time) => substr($time, 0, 10) === $day, ARRAY_FILTER_USE_KEY);
+        if ($left) {
+            uksort($left, fn($a, $b) => strtotime($a) <=> strtotime($b));
+            $history[$day] = end($left);
+        } else {
+            unset($history[$day]);
+        }
+        return ['recent' => $recent, 'history' => $history];
+    }
+
     /** Drops history entries older than $days days before $today (Y-m-d). */
     public static function prune(array $history, string $today, int $days): array
     {

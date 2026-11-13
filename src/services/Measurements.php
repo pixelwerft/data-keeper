@@ -244,6 +244,32 @@ class Measurements extends Component
         return $limit === null ? $rows : array_slice($rows, 0, $limit);
     }
 
+    /**
+     * Deletes one of the single measurements, and with it its place in the course. The latest measurement cannot go:
+     * the overview is built from it (measure again to replace it).
+     *
+     * @param string $at the time of the measurement (ISO 8601), as {@see recent()} gives it
+     * @return bool whether it was deleted
+     */
+    public function deleteRecent(string $at): bool
+    {
+        $deleted = false;
+        $stored = DataKeeper::$plugin->store->update(function(array $data) use ($at, &$deleted) {
+            if (($data['last']['measuredAt'] ?? null) === $at) {
+                return $data;
+            }
+            $result = Growth::removeRecent($data['recent'] ?? [], $data['history'] ?? [], $at);
+            if ($result === null) {
+                return $data;
+            }
+            $deleted = true;
+            $data['recent'] = $result['recent'];
+            $data['history'] = $result['history'];
+            return $data;
+        });
+        return $stored && $deleted;
+    }
+
     /** @return array{since: ?string, values: array<string, ?float>} */
     public function growth(array $last): array
     {

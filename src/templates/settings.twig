@@ -247,12 +247,12 @@
   {{ forms.lightswitchField({
     label: 'Allow remote queries'|t('data-keeper'),
     instructions: 'A tool outside the site can ask for the stored figures as JSON at the address below. Access needs the key of the site; admins find it on the «Information» tab of the overview and can replace it there.'|t('data-keeper'),
-    id: 'allowRemote', name: 'allowRemote', on: settings.allowRemote,
+    id: 'allowRemote', name: 'allowRemote', on: remoteAllowed,
     disabled: 'allowRemote' in overridden, warning: s.warn(overridden, 'allowRemote'),
   }) }}
   <p class="light">
     {{ 'Address'|t('data-keeper') }}: <code>{{ remoteUrl }}</code><br>
-    {{ 'Send the key as «Authorization: Bearer <key>» (or, if the tool can only call a URL, as ?key=).'|t('data-keeper') }}
+    {{ 'Send the key in the header «X-Data-Keeper-Key: <key>» or «Authorization: Bearer <key>». It is only accepted over HTTPS and never in the address, where it would end up in logs.'|t('data-keeper') }}
   </p>
 
   <h3>{{ 'Status endpoint'|t('data-keeper') }}</h3>
@@ -264,6 +264,6 @@
   }) }}
   <p class="light">
     {{ 'Address'|t('data-keeper') }}: <code>{{ statusUrl }}</code><br>
-    {{ 'Send the token as «Authorization: Bearer <token>» (or, if the tool can only call a URL, as ?token=). Add ?fail=alert (or ?fail=warn) to get an HTTP 503 from that level on.'|t('data-keeper') }}
+    {{ 'Send the token in the header «X-Data-Keeper-Key: <token>» or «Authorization: Bearer <token>» (or, if the tool can only call a URL, as ?statusToken=). Add ?fail=alert (or ?fail=warn) to get an HTTP 503 from that level on.'|t('data-keeper') }}
   </p>
 </div>

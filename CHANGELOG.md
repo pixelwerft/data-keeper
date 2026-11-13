@@ -4,6 +4,35 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.3.0 - 2026-11-13
+
+### Added
+- Sums below the database tables (the ones listed and, from the next measurement on, all tables) and below the file
+  storage on the overview.
+- Buttons on the key figure cards: clear the change records, empty the trash, clear the log files (can be switched off
+  in the settings), list the backup files and delete single ones, optimize the database tables and, on MySQL and
+  MariaDB, check them. Each says what it would do first and only runs after a confirmation. On the console:
+  `data-keeper/maintenance`.
+- Remote queries: with «Allow remote queries» switched on, `/actions/data-keeper/remote` answers with the stored
+  figures as JSON for whoever sends the key of the site. The key is generated once, kept in `storage/`, and can be
+  copied and replaced by admins on the new «Information» tab.
+- An «Information» tab on the overview with the versions of Craft, PHP, the database and the plugin.
+- A setting for the position of the section in the sidebar.
+- «Remember these options as the default» when clearing the saved versions of an entry.
+
+### Changed
+- Clearing saved versions, the actions of the cards and the backup files open in a dialog on the overview instead of
+  on a page of their own.
+- The section sits second from the bottom of the sidebar by default.
+- After saved versions were cleared, the overview shows the new numbers at once instead of the ones of the last
+  measurement.
+- The German interface calls the section «Data Keeper» like the other languages, with the line «Übersicht
+  Datenhaushalt» below the title.
+- «Largest tables» is now «Database tables (by size)», «Folders» is «File storage».
+
+### Fixed
+- Clearing the saved versions of an entry missed versions that only exist in another site than the entry’s first one.
+
 ## 1.2.1 - 2026-11-13
 
 ### Changed

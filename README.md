@@ -17,7 +17,7 @@ switch them on and confirm a run**. Notifications tell you where and when someth
 | | |
 | --- | --- |
 | ![Overview](docs/screenshots/overview.png) | ![Cleanup preview](docs/screenshots/cleanup.png) |
-| Key figures with levels and growth, largest tables, folders and the course over the months. | What every rule would remove, before anything is deleted. |
+| Key figures with levels and growth, the database tables, the file storage and the course over the months. | What every rule would remove, before anything is deleted. |
 | ![Clear saved versions](docs/screenshots/versions.png) | ![Settings](docs/screenshots/settings.png) |
 | Clear the saved versions of one entry. | Limits, retention rules and notifications – everything off by default. |
 
@@ -40,8 +40,14 @@ The screenshots show made-up figures from a test install.
   would remove, the oldest one and examples. Removing needs a ticked confirmation, runs in the queue, and is refused if
   the numbers changed since you looked.
 - **Clear saved versions per entry** – in *Most saved versions*, clear the versions of one entry: keep the newest N
-  (0 clears all), optionally the very first version, and optionally only versions older than N days. Shows what goes
-  first, deletes only after you confirm.
+  (0 clears all), optionally the very first version, and optionally only versions older than N days. Opens in a dialog
+  on the overview, shows what goes first, deletes only after you confirm, and can remember your options as the default.
+- **Actions on the cards** – clear the change records, empty the trash, clear the log files, list the backup files and
+  delete single ones, optimize the database tables and (MySQL, MariaDB) check them for damage. Each opens in a dialog,
+  says what it would do, and only runs after you confirm.
+- **Sums** – below the database tables (the ones listed and all of them) and below the file storage.
+- **Remote queries** – let a tool outside the site read the figures as JSON, for example a dashboard that watches
+  several sites. Off by default; access needs the key of the site.
 - **Old versions at a glance** – the overview says how many saved versions are older than a year and older than two years.
 - **Notifications** – switch on the topics you care about (a figure got too big, no measurement for a while, a cleanup
   finished or failed, old data is waiting). Each is available as a **notice in the control panel**, as a **message
@@ -76,7 +82,9 @@ A *Data Keeper* section appears in the control panel. **Nothing is switched on a
 | --- | --- |
 | *Access Data Keeper* (added by Craft) | Open the section and the overview. |
 | *Measure the site* | Use «Measure now». |
-| *See what a cleanup would remove, run it and clear saved versions* | Open *Cleanup*, run a cleanup, clear versions of an entry. |
+| *See what a cleanup would remove, run it and clear saved versions* | Open *Cleanup*, run a cleanup, clear versions of an entry, use the actions on the cards (clear, optimize, check, delete backup files). |
+
+The key for remote queries is shown to admins only, and only admins can replace it.
 
 Settings are for admins (*Settings → Plugins → Data Keeper*, needs `allowAdminChanges`).
 
@@ -117,6 +125,13 @@ return [
     'channelEmail' => true,   'emailRecipients' => 'owner@example.com, tech@example.com',
     'channelWebhook' => true, 'webhookUrl' => '$DATA_KEEPER_WEBHOOK_URL', 'webhookSecret' => '$DATA_KEEPER_WEBHOOK_SECRET',
     'statusToken' => '$DATA_KEEPER_STATUS_TOKEN',
+
+    // remote queries – off by default
+    'allowRemote' => true,
+
+    // control panel
+    'navPosition' => 'secondLast', // where the section sits in the sidebar: 'secondLast', 'last' or 'craft'
+    'logsClearable' => true,       // offer «Clear» on the «Logs» card
 ];
 ```
 
@@ -184,6 +199,42 @@ curl -i "https://example.com/actions/data-keeper/status?token=$TOKEN&fail=alert"
 a plain «is the URL healthy» monitor raises the alarm. The endpoint only reads what was stored – it never measures – and
 answers 404 without a configured token and 401 with a wrong one. A header is safer than `?token=` (URLs end up in logs).
 
+## Actions on the cards
+
+The cards of the overview carry buttons for things you do by hand. Each opens a dialog that says what would happen;
+nothing runs before you confirm, and the work is done in the queue.
+
+| Card | Button | What it does |
+| --- | --- | --- |
+| Database | *Optimize tables* | `OPTIMIZE TABLE` on MySQL and MariaDB (the table is rebuilt, unused space is given back), `VACUUM (ANALYZE)` on PostgreSQL. No data is changed. Worth it after a lot was removed. |
+| Database | *Check tables* | `CHECK TABLE` on MySQL and MariaDB: lists what the database reports. Nothing is changed and nothing is repaired – `REPAIR TABLE` does not work with InnoDB, the engine Craft needs; a damaged table is restored from a backup. Not offered on PostgreSQL. |
+| Change records | *Clear* | Removes the change records Craft does not need, whatever their age. Records of entries with drafts stay. |
+| Deleted elements | *Clear* | Empties the trash with Craft’s own garbage collection, as `craft gc --delete-all-trashed` does. |
+| Backups | *Files* | Lists the files in the backup folder; each can be deleted after the browser asked «really?». |
+| Logs | *Clear* | Removes all log files directly in the log folder. Can be switched off with `logsClearable`. |
+
+The last results are listed on the overview under *Last actions*.
+
+## Remote queries
+
+A tool outside the site – a dashboard that watches several sites, for example – can read what the overview shows.
+Switch on **Allow remote queries** in the settings (`allowRemote`); until then the address answers 404.
+
+Access needs the **key of the site**. It is generated the first time an admin opens the *Information* tab of the
+overview, where it can be copied and replaced by a new one. It is kept in the plugin’s file in `storage/`, not in the
+project config, so it does not end up in Git, differs per environment and can be replaced on a live site.
+
+```bash
+curl -H "Authorization: Bearer $KEY" "https://example.com/actions/data-keeper/remote"
+curl "https://example.com/actions/data-keeper/remote?key=$KEY&history=daily"   # tools that can only call a URL
+```
+
+The answer holds `schema`, `plugin`, `site`, `url`, `measuredAt`, `comparedWith`, `status` (`ok`, `warn`, `alert`),
+`figures` (per key figure: `label`, `value`, `unit`, `level`, `warn`, `alert`, `change`), `tables`, `tablesTotal`,
+`folders`, `foldersTotal`, `versionAge`, `config` and `history` (the last measurement of each month, or day by day with
+`?history=daily`). It only reads what was stored – it never measures – and answers 401 without the right key. A header
+is safer than `?key=` (URLs end up in logs). If `storage/` is not persistent on your host, the key changes with it.
+
 ## Console commands
 
 ```bash
@@ -194,6 +245,8 @@ php craft data-keeper/cleanup --apply     # really remove (add --rule=revisions 
 php craft data-keeper/run --apply         # cleanup, then measure – what a daily cron job calls
 php craft data-keeper/run --apply --queue # the same, in the queue
 php craft data-keeper/status              # what needs attention; exit code 0 ok, 1 warn, 2 alert
+php craft data-keeper/maintenance/list    # the actions of the cards and what each would work on
+php craft data-keeper/maintenance optimize-tables --apply   # run one (without --apply it only says what it would do)
 ```
 
 A daily cron job (a measurement a day gives the history and triggers the notifications):

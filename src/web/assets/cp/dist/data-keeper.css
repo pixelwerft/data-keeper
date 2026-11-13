@@ -34,7 +34,7 @@
 .dk-attention-alert .light { color: var(--dk-muted); }
 
 .dk-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 0 0 24px; padding: 0; list-style: none; }
-.dk-card { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--dk-border); border-left-width: 4px; border-radius: var(--dk-radius); background: var(--dk-surface); }
+.dk-card { display: grid; align-content: start; gap: 2px; padding: 12px 14px; border: 1px solid var(--dk-border); border-left-width: 4px; border-radius: var(--dk-radius); background: var(--dk-surface); }
 .dk-card-ok { border-left-color: var(--dk-ok); }
 .dk-card-warn { border-left-color: var(--dk-warn); }
 .dk-card-alert { border-left-color: var(--dk-alert); }
@@ -49,11 +49,18 @@
 .dk-card-alert .dk-level { background: #fde2e4; color: #8a041a; }
 .dk-growth { font-size: 13px; }
 .dk-limit { font-size: 12px; }
+.dk-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 
 .dk-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-bottom: 24px; }
 .dk h2 { margin: 18px 0 8px; }
-.dk > section + section { margin-top: 24px; }
+.dk > section + section, #dk-overview > section + section { margin-top: 24px; }
 .dk-num { text-align: right !important; white-space: nowrap; }
+.dk tfoot th, .dk tfoot td { border-top: 2px solid var(--dk-border); font-weight: 600; }
+.dk tfoot tr + tr th, .dk tfoot tr + tr td { border-top-width: 1px; }
+.dk-remote { margin-top: 24px; }
+.dk-info th[scope="row"] { width: 14rem; font-weight: normal; color: var(--dk-muted); }
+.dk-remote th[scope="row"] { width: 8rem; font-weight: normal; color: var(--dk-muted); }
+.dk-remote code { overflow-wrap: anywhere; }
 
 .dk-state { padding: 0 8px; border-radius: 10px; background: var(--dk-surface-muted); font-size: 12px; }
 .dk-state-on { background: #dff3e7; color: #14532d; }
@@ -61,6 +68,7 @@
 
 .dk-run { max-width: 52rem; margin: 20px 0; padding: 12px 16px; border: 1px solid var(--dk-border); border-left: 4px solid var(--dk-alert); border-radius: var(--dk-radius); background: var(--dk-surface); }
 .dk-run h2 { margin-top: 0; }
+.dk-run-plain { border-left-color: var(--dk-info); }
 .dk-check { display: block; margin: 8px 0 12px; }
 .dk-inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 16px; }
 .dk-inline input[type="number"] { width: 6rem; }
@@ -73,3 +81,14 @@
 @media (min-width: 1200px) {
   .dk-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
+
+/* the line below the page title; it sits outside .dk, so the colour has its own fallback */
+.dk-claim { margin: 2px 0 0; color: var(--gray-600, #596673); font-size: 13px; }
+
+/* a page opened in a dialog on the overview */
+.dk-dialog { width: 720px; max-width: calc(100vw - 48px); }
+.dk-dialog .body { max-height: calc(100vh - 220px); overflow: auto; }
+.dk-dialog-title { margin: 0 0 12px; }
+.dk-dialog-loading { min-height: 140px; opacity: .5; }
+.dk-dialog .dk-run { margin-bottom: 0; }
+.dk-files form { margin: 0; }

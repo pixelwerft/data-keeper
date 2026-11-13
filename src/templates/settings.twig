@@ -12,6 +12,22 @@
     {{ 'The cleanup rules and the notifications only act after you switch them on here. The plugin never deletes anything on its own.'|t('data-keeper') }}
   </aside>
 
+  <h2>{{ 'Control panel'|t('data-keeper') }}</h2>
+
+  {{ forms.selectField({
+    label: 'Position in the sidebar'|t('data-keeper'),
+    instructions: 'Where the Data Keeper section sits in the sidebar of the control panel.'|t('data-keeper'),
+    id: 'navPosition', name: 'navPosition', value: settings.navPosition, errors: settings.getErrors('navPosition'),
+    options: [
+      { value: 'secondLast', label: 'Second from the bottom'|t('data-keeper') },
+      { value: 'last', label: 'At the very bottom'|t('data-keeper') },
+      { value: 'craft', label: 'Where Craft puts plugins'|t('data-keeper') },
+    ],
+    disabled: 'navPosition' in overridden, warning: s.warn(overridden, 'navPosition'),
+  }) }}
+
+  <hr>
+
   <h2>{{ 'Measuring'|t('data-keeper') }}</h2>
 
   {{ forms.textField({
@@ -100,6 +116,12 @@
     id: 'logsKeepDays', name: 'logsKeepDays', type: 'number', size: 6, min: 1,
     value: settings.logsKeepDays, errors: settings.getErrors('logsKeepDays'),
     disabled: 'logsKeepDays' in overridden, warning: s.warn(overridden, 'logsKeepDays'),
+  }) }}
+  {{ forms.lightswitchField({
+    label: 'Offer «Clear» for the logs'|t('data-keeper'),
+    instructions: 'A button on the «Logs» card of the overview removes all log files at once, after a confirmation. Independent of the rule above.'|t('data-keeper'),
+    id: 'logsClearable', name: 'logsClearable', on: settings.logsClearable,
+    disabled: 'logsClearable' in overridden, warning: s.warn(overridden, 'logsClearable'),
   }) }}
 
   {{ forms.lightswitchField({
@@ -220,6 +242,18 @@
     value: settings.remindAfterDays, errors: settings.getErrors('remindAfterDays'),
     disabled: 'remindAfterDays' in overridden, warning: s.warn(overridden, 'remindAfterDays'),
   }) }}
+
+  <h3>{{ 'Remote queries'|t('data-keeper') }}</h3>
+  {{ forms.lightswitchField({
+    label: 'Allow remote queries'|t('data-keeper'),
+    instructions: 'A tool outside the site can ask for the stored figures as JSON at the address below. Access needs the key of the site; admins find it on the «Information» tab of the overview and can replace it there.'|t('data-keeper'),
+    id: 'allowRemote', name: 'allowRemote', on: settings.allowRemote,
+    disabled: 'allowRemote' in overridden, warning: s.warn(overridden, 'allowRemote'),
+  }) }}
+  <p class="light">
+    {{ 'Address'|t('data-keeper') }}: <code>{{ remoteUrl }}</code><br>
+    {{ 'Send the key as «Authorization: Bearer <key>» (or, if the tool can only call a URL, as ?key=).'|t('data-keeper') }}
+  </p>
 
   <h3>{{ 'Status endpoint'|t('data-keeper') }}</h3>
   {{ forms.autosuggestField({

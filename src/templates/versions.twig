@@ -1,18 +1,18 @@
 {# Clear the saved versions of one element: shows how many would go before anything is deleted. #}
-{% extends '_layouts/cp' %}
+{% extends craft.app.request.isAjax ? 'data-keeper/_dialog' : '_layouts/cp' %}
 {% import 'data-keeper/_macros' as m %}
 {% do view.registerAssetBundle('pixelwerft\\datakeeper\\web\\assets\\cp\\DataKeeperAsset') %}
 
 {% set title = 'Clear saved versions'|t('data-keeper') %}
 {% set selectedSubnavItem = 'overview' %}
-{% set crumbs = [{ label: 'Data Keeper', url: cpUrl('data-keeper') }] %}
+{% set crumbs = [{ label: 'Data Keeper'|t('data-keeper'), url: cpUrl('data-keeper') }] %}
 
 {% block content %}
   <div class="dk">
     <h2>{% if element %}<a href="{{ element.cpEditUrl }}">{{ element }}</a>{% else %}#{{ canonicalId }}{% endif %}</h2>
     <p>{{ 'This entry has {n} saved versions.'|t('data-keeper', { n: total }) }}</p>
 
-    <form method="get" accept-charset="UTF-8" class="dk-options">
+    <form method="get" action="{{ cpUrl('data-keeper/versions/' ~ canonicalId) }}" accept-charset="UTF-8" class="dk-options">
       <div class="dk-inline">
         <label for="dk-keep">{{ 'Keep the newest'|t('data-keeper') }}</label>
         <input type="number" id="dk-keep" name="keep" value="{{ keep }}" min="0" max="{{ total }}" class="text">
@@ -41,6 +41,7 @@
           {% if keepFirst %}{{ 'The very first version stays as well.'|t('data-keeper') }}{% endif %}
           {% if days %}{{ 'Only versions older than {n} days are deleted.'|t('data-keeper', { n: days }) }}{% endif %}
           {{ 'The entry itself and its current content are not changed. Deleted versions can no longer be restored.'|t('data-keeper') }}</p>
+        <label class="dk-check"><input type="checkbox" name="remember" value="1"> {{ 'Remember these options as the default'|t('data-keeper') }}</label>
         <label class="dk-check"><input type="checkbox" required> {{ 'I understand that this is permanent.'|t('data-keeper') }}</label>
         <button type="submit" class="btn submit">{{ 'Delete {n} saved versions'|t('data-keeper', { n: toDelete }) }}</button>
       </form>

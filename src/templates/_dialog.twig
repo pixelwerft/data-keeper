@@ -1,0 +1,6 @@
+{# What a page shows when it is opened in a dialog on the overview: its title and content, without the control panel
+   around it. The pages extend this instead of the control panel layout when they are asked for by the dialog script. #}
+<div class="dk-dialog-page">
+  <h2 class="dk-dialog-title">{{ title }}</h2>
+  {% block content %}{% endblock %}
+</div>

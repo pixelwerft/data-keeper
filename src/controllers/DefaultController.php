@@ -3,6 +3,7 @@
 namespace pixelwerft\datakeeper\controllers;
 
 use Craft;
+use craft\helpers\App;
 use craft\web\Controller;
 use pixelwerft\datakeeper\DataKeeper;
 use pixelwerft\datakeeper\helpers\Growth;
@@ -36,7 +37,23 @@ class DefaultController extends Controller
             'canMeasure' => Craft::$app->getUser()->checkPermission(DataKeeper::PERMISSION_MEASURE),
             'canCleanup' => Craft::$app->getUser()->checkPermission(DataKeeper::PERMISSION_CLEANUP),
             'levels' => [],
+            'cardActions' => [],
+            'info' => $this->installation(),
+            'lastActions' => $plugin->maintenance->results(),
+            'remote' => null,
         ];
+        if ($variables['canCleanup']) {
+            $variables['cardActions'] = $plugin->maintenance->byFigure();
+        }
+        if (Craft::$app->getUser()->getIsAdmin()) {
+            // the key is for admins only; it is generated here the first time the page is opened
+            $variables['remote'] = [
+                'enabled' => $plugin->remote->enabled(),
+                'key' => $plugin->remote->key(),
+                'createdAt' => $plugin->remote->keyCreatedAt(),
+                'url' => $plugin->remote->url(),
+            ];
+        }
 
         if ($last) {
             $variables += $last;
@@ -64,6 +81,29 @@ class DefaultController extends Controller
         return $this->renderTemplate('data-keeper/index', $variables);
     }
 
+    /**
+     * What the «Infos» tab says about the installation. Read when the page is opened; none of it is stored.
+     *
+     * @return array<string, mixed>
+     */
+    private function installation(): array
+    {
+        $db = Craft::$app->getDb();
+        $root = rtrim((string)Craft::getAlias('@root'), '/') . '/';
+        $file = DataKeeper::$plugin->store->path();
+        return [
+            'plugin' => DataKeeper::$plugin->getVersion(),
+            'craft' => Craft::$app->getVersion() . ' ' . Craft::$app->edition->name,
+            'php' => PHP_VERSION,
+            'database' => $db->getDriverLabel() . ' ' . App::normalizeVersion($db->getSchema()->getServerVersion()),
+            'tablePrefix' => (string)$db->tablePrefix,
+            'environment' => Craft::$app->env,
+            'devMode' => Craft::$app->getConfig()->getGeneral()->devMode,
+            'timeZone' => Craft::$app->getTimeZone(),
+            'storeFile' => str_starts_with($file, $root) ? substr($file, strlen($root)) : $file,
+        ];
+    }
+
     public function actionMeasure(): Response
     {
         $this->requirePostRequest();
@@ -86,12 +126,18 @@ class DefaultController extends Controller
         if (!$element && $total === 0) {
             throw new NotFoundHttpException('Element not found.');
         }
+        // the options start with what a person last remembered as the default here, else with the retention rule's
         $settings = $plugin->getSettings();
+        $default = $plugin->store->get('versionDefaults', []) + [
+            'keep' => $settings->revisionsKeep,
+            'keepFirst' => $settings->revisionsKeepFirst,
+            'days' => $settings->revisionsMode === 'age' ? $settings->revisionsMaxAgeDays : 0,
+        ];
         $request = $this->request;
         $submitted = $request->getQueryParam('keep') !== null;
-        $keep = max(0, (int)$request->getQueryParam('keep', $settings->revisionsKeep));
-        $keepFirst = $submitted ? (bool)$request->getQueryParam('keepFirst') : $settings->revisionsKeepFirst;
-        $days = max(0, (int)$request->getQueryParam('days', $settings->revisionsMode === 'age' ? $settings->revisionsMaxAgeDays : 0));
+        $keep = max(0, (int)$request->getQueryParam('keep', $default['keep']));
+        $keepFirst = $submitted ? (bool)$request->getQueryParam('keepFirst') : (bool)$default['keepFirst'];
+        $days = max(0, (int)$request->getQueryParam('days', $default['days']));
 
         return $this->renderTemplate('data-keeper/versions', [
             'element' => $element,
@@ -122,9 +168,16 @@ class DefaultController extends Controller
             return $this->redirect("data-keeper/versions/$canonicalId?keep=$keep&keepFirst=" . (int)$keepFirst . "&days=$days");
         }
 
+        if ($this->request->getBodyParam('remember')) {
+            DataKeeper::$plugin->store->set('versionDefaults', ['keep' => $keep, 'keepFirst' => $keepFirst, 'days' => $days]);
+        }
+
         $deleted = $versions->clear($canonicalId, $keep, $keepFirst, $days);
+        // the overview shows the stored measurement: bring its version figures up to date, or it would still say
+        // what was there before and look as if nothing had happened
+        DataKeeper::$plugin->measurements->refreshVersions();
         Craft::info("Cleared $deleted saved versions of element $canonicalId (kept the newest $keep" . ($keepFirst ? ' and the first' : '') . ($days ? ", only older than $days days" : '') . ').', __METHOD__);
-        $this->setSuccessFlash(DataKeeper::t('{n} saved versions were deleted. Measure again to update the figures.', ['n' => $deleted]));
+        $this->setSuccessFlash(DataKeeper::t('{n} saved versions were deleted.', ['n' => $deleted]));
         return $this->redirect('data-keeper');
     }
 
@@ -145,6 +198,16 @@ class DefaultController extends Controller
             throw new NotFoundHttpException('Element not found.');
         }
         return $element;
+    }
+
+    /** Replaces the key for remote queries by a new one (admins). The old key stops working at once. */
+    public function actionResetRemoteKey(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin(false);
+        DataKeeper::$plugin->remote->resetKey();
+        $this->setSuccessFlash(DataKeeper::t('A new key was generated. The old one no longer works.'));
+        return $this->redirect('data-keeper');
     }
 
     /** Sends a test message through the switched-on channels (admins). */

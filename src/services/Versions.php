@@ -110,20 +110,13 @@ class Versions extends Component
         if ($type === null) {
             return 0;
         }
-        $siteId = (int)(new Query())
-            ->select('siteId')
-            ->from(Table::ELEMENTS_SITES)
-            ->where(['elementId' => $canonicalId])
-            ->orderBy(['siteId' => SORT_ASC])
-            ->scalar();
-        if ($siteId === 0) {
-            return 0;
-        }
-
+        // in any site: a version only exists in the sites the element had when it was saved, which need not include
+        // the element's first site of today (Craft's own `utils/prune-revisions` asks the same way)
         /** @var ElementInterface[] $revisions */
         $revisions = $type::find()
             ->revisionOf($canonicalId)
-            ->siteId($siteId)
+            ->site('*')
+            ->unique()
             ->status(null)
             ->id($ids)
             ->all();

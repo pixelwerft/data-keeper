@@ -6,9 +6,21 @@
 
 {% set title = 'Data Keeper'|t('data-keeper') %}
 {% set selectedSubnavItem = 'overview' %}
+{# two tabs; Craft shows the container a tab points to and hides the others #}
+{% set tabs = {
+  overview: { label: 'Overview'|t('data-keeper'), url: '#dk-overview' },
+  infos: { label: 'Information'|t('data-keeper'), url: '#dk-infos' },
+} %}
+
+{# the name stays the same in every language; the line below it says what the section is #}
+{% block pageTitle %}
+  {{ parent() }}
+  <p class="dk-claim">{{ 'Data housekeeping overview'|t('data-keeper') }}</p>
+{% endblock %}
 
 {% block content %}
   <div class="dk">
+  <div id="dk-overview">
     {{ m.minimisation() }}
 
     <p class="dk-lead">{{ 'How much the site stores and how fast it grows. It is only measured when you click «Measure now» (or when the console command or the queue job runs). The measurements are kept in a small file in storage/data-keeper, not in the database.'|t('data-keeper') }}</p>
@@ -76,6 +88,16 @@
             {% endif %}
           </span>
           <span class="dk-limit light">{{ 'Keep an eye on it from {warn}, act from {alert}{unit}'|t('data-keeper', { warn: m.num(limit.warn), alert: m.num(limit.alert), unit: unit }) }}</span>
+          {% if cardActions[key] is defined %}
+            {# each leads to a page that says what the action would do; nothing happens by clicking here #}
+            <span class="dk-card-actions">
+              {% for cardAction in cardActions[key] %}<a class="btn small" href="{{ cpUrl('data-keeper/action/' ~ cardAction.id) }}" data-dk-dialog data-dk-close="{{ 'Close'|t('data-keeper') }}">{{ cardAction.button }}</a>{% endfor %}
+            </span>
+          {% elseif key == 'backups' and canCleanup %}
+            <span class="dk-card-actions">
+              <a class="btn small" href="{{ cpUrl('data-keeper/backups') }}" data-dk-dialog data-dk-name="backups" data-dk-close="{{ 'Close'|t('data-keeper') }}">{{ 'Files…'|t('data-keeper') }}</a>
+            </span>
+          {% endif %}
         </li>
       {% endfor %}
     </ul>
@@ -87,7 +109,7 @@
 
     <div class="dk-grid">
       <section>
-        <h2>{{ 'Largest tables'|t('data-keeper') }}</h2>
+        <h2>{{ 'Database tables (by size)'|t('data-keeper') }}</h2>
         {% if tables|length %}
           <table class="data fullwidth">
             <thead><tr><th>{{ 'Table'|t('data-keeper') }}</th><th>{{ 'Content'|t('data-keeper') }}</th><th class="dk-num">{{ 'Rows'|t('data-keeper') }}</th><th class="dk-num">MB</th></tr></thead>
@@ -96,6 +118,22 @@
                 <tr><td><code>{{ t.name }}</code></td><td class="light">{{ tableNotes[t.name] ?? '' }}</td><td class="dk-num">{{ m.num(t.rows) }}</td><td class="dk-num">{{ m.num(t.mb) }}</td></tr>
               {% endfor %}
             </tbody>
+            {# the list holds the largest tables only; where the measurement has it, the sum of all tables follows #}
+            {% set allListed = tablesTotal is defined and tablesTotal.count <= tables|length %}
+            <tfoot>
+              <tr>
+                <th scope="row" colspan="2">{{ allListed ? 'Sum'|t('data-keeper') : 'Sum of the tables listed'|t('data-keeper') }}</th>
+                <td class="dk-num">{{ m.num(tables|reduce((sum, t) => sum + t.rows, 0)) }}</td>
+                <td class="dk-num">{{ m.num(tables|reduce((sum, t) => sum + t.mb, 0)|round(1)) }}</td>
+              </tr>
+              {% if tablesTotal is defined and not allListed %}
+                <tr>
+                  <th scope="row" colspan="2">{{ 'All {n} tables'|t('data-keeper', { n: tablesTotal.count }) }}</th>
+                  <td class="dk-num">{{ m.num(tablesTotal.rows) }}</td>
+                  <td class="dk-num">{{ m.num(tablesTotal.mb) }}</td>
+                </tr>
+              {% endif %}
+            </tfoot>
           </table>
           <p class="light">{{ 'Row counts are estimates of the database.'|t('data-keeper') }}</p>
         {% else %}
@@ -104,7 +142,7 @@
       </section>
 
       <section>
-        <h2>{{ 'Folders'|t('data-keeper') }}</h2>
+        <h2>{{ 'File storage'|t('data-keeper') }}</h2>
         <table class="data fullwidth">
           <thead><tr><th>{{ 'Folder'|t('data-keeper') }}</th><th class="dk-num">{{ 'Files'|t('data-keeper') }}</th><th class="dk-num">MB</th><th>{{ 'Oldest – newest'|t('data-keeper') }}</th></tr></thead>
           <tbody>
@@ -117,6 +155,14 @@
               </tr>
             {% endfor %}
           </tbody>
+          <tfoot>
+            <tr>
+              <th scope="row">{{ 'Sum'|t('data-keeper') }}</th>
+              <td class="dk-num">{{ m.num(folders|reduce((sum, f) => sum + f.files, 0)) }}</td>
+              <td class="dk-num">{{ m.num(folders|reduce((sum, f) => sum + f.mb, 0)|round(1)) }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
 
         <h2>{{ 'Most saved versions'|t('data-keeper') }}</h2>
@@ -128,7 +174,7 @@
                 <tr>
                   <td>{% if r.url %}<a href="{{ r.url }}">{{ r.title ?: '#' ~ r.canonicalId }}</a>{% else %}{{ r.title ?: '#' ~ r.canonicalId }}{% endif %}</td>
                   <td class="dk-num">{{ m.num(r.n) }}</td>
-                  {% if canCleanup %}<td class="dk-num"><a class="btn small" href="{{ cpUrl('data-keeper/versions/' ~ r.canonicalId) }}">{{ 'Clear versions…'|t('data-keeper') }}</a></td>{% endif %}
+                  {% if canCleanup %}<td class="dk-num"><a class="btn small" href="{{ cpUrl('data-keeper/versions/' ~ r.canonicalId) }}" data-dk-dialog data-dk-close="{{ 'Close'|t('data-keeper') }}">{{ 'Clear versions…'|t('data-keeper') }}</a></td>{% endif %}
                 </tr>
               {% endfor %}
             </tbody>
@@ -148,6 +194,29 @@
       </section>
     </div>
 
+    {% if lastActions|length %}
+      <section>
+        <h2>{{ 'Last actions'|t('data-keeper') }}</h2>
+        <table class="data fullwidth">
+          <thead><tr><th>{{ 'Date'|t('data-keeper') }}</th><th>{{ 'Action'|t('data-keeper') }}</th><th>{{ 'Result'|t('data-keeper') }}</th></tr></thead>
+          <tbody>
+            {% for done in lastActions %}
+              <tr>
+                <td>{{ done.at|datetime('short') }}</td>
+                <td>{{ done.label }}</td>
+                <td>
+                  {% if done.ok %}{{ done.text }}{% else %}<span class="error">{{ done.text }}</span>{% endif %}
+                  {% if done.problems|length %}
+                    <ul class="dk-plain">{% for problem in done.problems %}<li><code>{{ problem }}</code></li>{% endfor %}</ul>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    {% endif %}
+
     <section>
       <h2>{{ 'Course (last measurement of each month)'|t('data-keeper') }}</h2>
       {% if history|length %}
@@ -165,5 +234,67 @@
     </section>
 
     {% endif %}
+  </div>
+
+  {# about the installation the figures come from; read when the page is opened, not part of a measurement #}
+  <div id="dk-infos" class="hidden">
+    <h2>{{ 'Installation'|t('data-keeper') }}</h2>
+    <table class="data fullwidth dk-info">
+      <tbody>
+        <tr><th scope="row">Data Keeper</th><td>{{ info.plugin }}</td></tr>
+        <tr><th scope="row">Craft CMS</th><td>{{ info.craft }}</td></tr>
+        <tr><th scope="row">PHP</th><td>{{ info.php }}</td></tr>
+        <tr><th scope="row">{{ 'Database'|t('data-keeper') }}</th><td>{{ info.database }}</td></tr>
+        <tr><th scope="row">{{ 'Table prefix'|t('data-keeper') }}</th><td>{% if info.tablePrefix %}<code>{{ info.tablePrefix }}</code>{% else %}{{ 'none'|t('data-keeper') }}{% endif %}</td></tr>
+        <tr><th scope="row">{{ 'Environment'|t('data-keeper') }}</th><td>{{ info.environment ?: '–' }}</td></tr>
+        <tr><th scope="row">{{ 'Dev mode'|t('data-keeper') }}</th><td>{{ info.devMode ? 'yes'|t('data-keeper') : 'no'|t('data-keeper') }}</td></tr>
+        <tr><th scope="row">{{ 'Time zone'|t('data-keeper') }}</th><td>{{ info.timeZone }}</td></tr>
+        <tr><th scope="row">{{ 'Measurements file'|t('data-keeper') }}</th><td><code>{{ info.storeFile }}</code></td></tr>
+        <tr><th scope="row">{{ 'Last measurement'|t('data-keeper') }}</th><td>{{ measured ? measuredAt|datetime('short') : 'Never measured'|t('data-keeper') }}</td></tr>
+      </tbody>
+    </table>
+
+    {# admins only: the key of the site and where a tool outside asks for the figures #}
+    {% if remote %}
+      {% import '_includes/forms' as forms %}
+      <section class="dk-remote">
+        <h2>{{ 'Remote queries'|t('data-keeper') }}</h2>
+        <p class="light">{{ 'A tool outside the site can ask for the figures of the overview as JSON – a dashboard that watches several sites, for example. Access needs the key below.'|t('data-keeper') }}</p>
+        <p>
+          {% if remote.enabled %}
+            <span class="dk-state dk-state-on">{{ 'Allowed'|t('data-keeper') }}</span>
+          {% else %}
+            <span class="dk-state">{{ 'Not allowed'|t('data-keeper') }}</span>
+            {{ 'Switch on «Allow remote queries» in the settings; until then the key opens nothing.'|t('data-keeper') }}
+            <a href="{{ cpUrl('settings/plugins/data-keeper') }}">{{ 'Open the settings'|t('data-keeper') }}</a>
+          {% endif %}
+        </p>
+        {% if remote.key == '' %}
+          <p class="error">{{ 'The key could not be stored. Check that the storage folder is writable.'|t('data-keeper') }}</p>
+        {% else %}
+          {{ forms.copytextField({
+            label: 'Key'|t('data-keeper'),
+            instructions: remote.createdAt ? 'generated on {date}'|t('data-keeper', { date: remote.createdAt|datetime('short') }) : null,
+            id: 'dk-remote-key', class: 'code', value: remote.key, size: 56,
+          }) }}
+          {{ forms.copytextField({
+            label: 'Address'|t('data-keeper'),
+            id: 'dk-remote-url', class: 'code', value: remote.url, size: 72,
+          }) }}
+          {{ forms.copytextField({
+            label: 'Example'|t('data-keeper'),
+            id: 'dk-remote-example', class: 'code', size: 72,
+            value: 'curl -H "Authorization: Bearer ' ~ remote.key ~ '" "' ~ remote.url ~ '"',
+          }) }}
+          <form method="post" accept-charset="UTF-8" class="dk-actions">
+            {{ csrfInput() }}
+            {{ actionInput('data-keeper/default/reset-remote-key') }}
+            <button type="button" class="btn small formsubmit" data-confirm="{{ 'Generate a new key? The current one stops working at once; every tool that uses it needs the new one.'|t('data-keeper') }}">{{ 'Generate a new key'|t('data-keeper') }}</button>
+            <span class="light">{{ 'The key is kept in the plugin’s file in storage, not in the project config. Treat it like a password.'|t('data-keeper') }}</span>
+          </form>
+        {% endif %}
+      </section>
+    {% endif %}
+  </div>
   </div>
 {% endblock %}

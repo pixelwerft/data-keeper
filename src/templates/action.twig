@@ -1,0 +1,37 @@
+{# One action of a key figure card (clear, optimize, check): says what it would do before anything happens. #}
+{% extends craft.app.request.isAjax ? 'data-keeper/_dialog' : '_layouts/cp' %}
+{% import 'data-keeper/_macros' as m %}
+{% do view.registerAssetBundle('pixelwerft\\datakeeper\\web\\assets\\cp\\DataKeeperAsset') %}
+
+{% set title = action.label %}
+{% set selectedSubnavItem = 'overview' %}
+{% set crumbs = [{ label: 'Data Keeper'|t('data-keeper'), url: cpUrl('data-keeper') }] %}
+
+{% block content %}
+  <div class="dk">
+    <p class="dk-lead">{{ action.description }}</p>
+
+    {% if preview.count == 0 %}
+      <p class="dk-note">{{ 'Nothing to do right now.'|t('data-keeper') }}</p>
+    {% else %}
+      <form method="post" accept-charset="UTF-8" class="dk-run{{ action.permanent ? '' : ' dk-run-plain' }}">
+        {{ csrfInput() }}
+        {{ actionInput('data-keeper/maintenance/run') }}
+        <input type="hidden" name="id" value="{{ action.id }}">
+        <input type="hidden" name="confirmedCount" value="{{ preview.count }}">
+        <p><strong>{{ action.amount(preview.count) }}</strong>{% if preview.mb is not null %} · {{ m.num(preview.mb) }} MB{% endif %}</p>
+        {% if preview.sample|length %}
+          <ul class="dk-plain light">{% for line in preview.sample %}<li>{{ line }}</li>{% endfor %}</ul>
+        {% endif %}
+        {% if action.permanent %}
+          <p>{{ 'This cannot be undone – make sure there is a backup you trust.'|t('data-keeper') }}</p>
+          <label class="dk-check"><input type="checkbox" required> {{ 'I understand that this is permanent.'|t('data-keeper') }}</label>
+        {% endif %}
+        <p class="light">{{ 'It runs in the background; the result appears in the overview.'|t('data-keeper') }}</p>
+        <button type="submit" class="btn submit">{{ action.label }}</button>
+      </form>
+    {% endif %}
+
+    <p><a href="{{ cpUrl('data-keeper') }}">{{ 'Back to the overview'|t('data-keeper') }}</a></p>
+  </div>
+{% endblock %}

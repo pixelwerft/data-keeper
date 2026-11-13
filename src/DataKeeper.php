@@ -15,10 +15,13 @@ use craft\helpers\UrlHelper;
 use craft\services\UserPermissions;
 use craft\web\twig\variables\Cp as CpVariable;
 use craft\web\UrlManager;
+use pixelwerft\datakeeper\helpers\NavPosition;
 use pixelwerft\datakeeper\models\Settings;
 use pixelwerft\datakeeper\services\Cleanup;
+use pixelwerft\datakeeper\services\Maintenance;
 use pixelwerft\datakeeper\services\Measurements;
 use pixelwerft\datakeeper\services\Notifications;
+use pixelwerft\datakeeper\services\Remote;
 use pixelwerft\datakeeper\services\Store;
 use pixelwerft\datakeeper\services\Versions;
 use yii\base\Event;
@@ -32,6 +35,8 @@ use yii\base\Event;
  * @property-read Versions $versions
  * @property-read Notifications $notifications
  * @property-read Store $store
+ * @property-read Maintenance $maintenance
+ * @property-read Remote $remote
  * @method Settings getSettings()
  */
 class DataKeeper extends Plugin
@@ -54,6 +59,8 @@ class DataKeeper extends Plugin
                 'cleanup' => Cleanup::class,
                 'versions' => Versions::class,
                 'notifications' => Notifications::class,
+                'maintenance' => Maintenance::class,
+                'remote' => Remote::class,
             ],
         ];
     }
@@ -128,6 +135,7 @@ class DataKeeper extends Plugin
             'figures' => $this->measurements->limits(),
             'overridden' => $overridden,
             'statusUrl' => UrlHelper::siteUrl(Craft::$app->getConfig()->getGeneral()->actionTrigger . '/data-keeper/status'),
+            'remoteUrl' => $this->remote->url(),
         ]);
     }
 
@@ -137,6 +145,8 @@ class DataKeeper extends Plugin
             $event->rules['data-keeper'] = 'data-keeper/default/index';
             $event->rules['data-keeper/cleanup'] = 'data-keeper/cleanup/index';
             $event->rules['data-keeper/versions/<canonicalId:\d+>'] = 'data-keeper/default/versions';
+            $event->rules['data-keeper/action/<id:[a-z-]+>'] = 'data-keeper/maintenance/index';
+            $event->rules['data-keeper/backups'] = 'data-keeper/maintenance/backups';
         });
     }
 
@@ -168,36 +178,17 @@ class DataKeeper extends Plugin
     }
 
     /**
-     * Moves the section to the bottom of the sidebar, below Plugin Store, next to the other housekeeping tools: directly
-     * before User Audit when it is installed (whichever plugin's handler runs first), otherwise at the very end.
+     * Places the section in the sidebar as the setting «Position in the sidebar» says: second from the bottom (the
+     * default), at the very bottom, or where Craft puts plugin sections. The handler is registered once the
+     * application is ready, so it runs after the ones of other plugins and also counts the items they add at the end.
      * `hasCpSection` stays on, so Craft still builds the item and checks the access permission.
      */
     private function registerNavPosition(): void
     {
-        Event::on(CpVariable::class, CpVariable::EVENT_REGISTER_CP_NAV_ITEMS, function(RegisterCpNavItemsEvent $event) {
-            $items = $event->navItems;
-            $own = null;
-            foreach ($items as $i => $item) {
-                if (($item['url'] ?? null) === $this->id) {
-                    $own = $item;
-                    unset($items[$i]);
-                    break;
-                }
-            }
-            if ($own === null) {
-                return;
-            }
-
-            $items = array_values($items);
-            $position = count($items);
-            foreach ($items as $i => $item) {
-                if (($item['url'] ?? null) === 'user-audit') {
-                    $position = $i;
-                    break;
-                }
-            }
-            array_splice($items, $position, 0, [$own]);
-            $event->navItems = $items;
+        Craft::$app->onInit(function() {
+            Event::on(CpVariable::class, CpVariable::EVENT_REGISTER_CP_NAV_ITEMS, function(RegisterCpNavItemsEvent $event) {
+                $event->navItems = NavPosition::place($event->navItems, $this->id, $this->getSettings()->navPosition);
+            });
         });
     }
 }

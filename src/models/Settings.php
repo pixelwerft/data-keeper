@@ -6,6 +6,7 @@ use Craft;
 use craft\base\Model;
 use craft\helpers\App;
 use pixelwerft\datakeeper\cleanup\TableRule;
+use pixelwerft\datakeeper\helpers\NavPosition;
 
 /**
  * Plugin settings. Everything that deletes or notifies is off by default.
@@ -14,6 +15,12 @@ use pixelwerft\datakeeper\cleanup\TableRule;
  */
 class Settings extends Model
 {
+    // Control panel
+    // -------------------------------------------------------------------------
+
+    /** @var string Where the section sits in the sidebar: `secondLast` (second from the bottom), `last` or `craft` (where Craft puts plugins). */
+    public string $navPosition = NavPosition::SECOND_LAST;
+
     // Measuring
     // -------------------------------------------------------------------------
 
@@ -42,6 +49,9 @@ class Settings extends Model
     public bool $backupsEnabled = false;
     /** @var int Database backups kept (the newest ones). */
     public int $backupsKeep = 10;
+
+    /** @var bool Offer «Clear» on the «Logs» card (removes all log files, after a confirmation). */
+    public bool $logsClearable = true;
 
     public bool $logsEnabled = false;
     /** @var int Log files older than this many days are removed. */
@@ -87,6 +97,12 @@ class Settings extends Model
     public string $webhookSecret = '';
     /** @var string Token for the status endpoint; empty switches the endpoint off. Environment variables allowed. */
     public string $statusToken = '';
+
+    // Remote queries – off until switched on
+    // -------------------------------------------------------------------------
+
+    /** @var bool Answer remote queries for the stored measurement (`/actions/data-keeper/remote`, needs the key of the site). */
+    public bool $allowRemote = false;
 
     /**
      * The limits of a key figure: the defaults overridden by the settings.
@@ -151,6 +167,7 @@ class Settings extends Model
     protected function defineRules(): array
     {
         return [
+            [['navPosition'], 'in', 'range' => NavPosition::ALL],
             [['historyDays'], 'integer', 'min' => 30, 'max' => 3650],
             [['revisionsKeep', 'backupsKeep'], 'integer', 'min' => 1, 'max' => 100000],
             [['revisionsMaxAgeDays'], 'integer', 'min' => 30, 'max' => 3650],

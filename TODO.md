@@ -2,6 +2,7 @@
 
 ## Open
 
+- [ ] A «Cache» key figure for the overview (icon to come)
 - [ ] Add the plugin in the Craft Console and submit it for approval (texts: `docs/store-listing.md`)
 - [ ] Register the package on Packagist (optional for the Plugin Store, needed for `composer require`)
 
@@ -19,3 +20,4 @@
 - [x] First commit pushed to GitHub, `v1.0.0` tagged (2026-11-13)
 - [x] Icons on the key figure cards of the overview, released as `v1.1.0` (2026-11-13)
 - [x] Translations fr, it, released as `v1.2.0` (2026-11-13)
+- [x] Card actions, dialogs, remote queries, Information tab, sidebar position, released as `v1.3.0` (2026-11-13)

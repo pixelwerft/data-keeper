@@ -42,6 +42,10 @@ of retention periods in your privacy policy.
 - **See before you delete** – the *Cleanup* page shows what every rule would remove. Removing needs a confirmation,
   runs in the queue and is refused if the numbers changed since you looked.
 - **Clear saved versions per entry** – keep the newest N, optionally the very first one, optionally only by age.
+- **Actions on the cards** – clear the change records, empty the trash, clear the logs, delete single backup files,
+  optimize and check the database tables. Each says what it would do and only runs after you confirm.
+- **Remote queries** – read the figures as JSON from outside, for example for a dashboard that watches several sites.
+  Off by default; access needs the key of the site.
 - **Notifications** – as a notice in the control panel, by e-mail or webhook, and at a status endpoint for monitoring
   tools.
 - **For your privacy policy** – the retention periods of all active rules, ready to copy.

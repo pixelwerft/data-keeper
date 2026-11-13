@@ -88,6 +88,11 @@ class Measurements extends Component
         $result = [
             'figures' => $figures,
             'tables' => array_slice($tables, 0, 15),
+            'tablesTotal' => [
+                'count' => count($tables),
+                'rows' => array_sum(array_column($tables, 'rows')),
+                'mb' => round(array_sum(array_column($tables, 'mb')), 1),
+            ],
             'folders' => $folders,
             'topRevisions' => $topRevisions,
             'versionAge' => ['year1' => $plugin->versions->olderThan(365), 'year2' => $plugin->versions->olderThan(730)],
@@ -122,6 +127,72 @@ class Measurements extends Component
 
         $plugin->notifications->refresh($result);
         return $result;
+    }
+
+    /**
+     * Brings what the stored measurement says about saved versions up to date (their number, the most of one entry,
+     * the entries with the most, how many are old) – cheap queries, no files are counted. Called after versions were
+     * removed, so the overview does not go on showing the numbers from before. Does nothing before the first
+     * measurement.
+     */
+    public function refreshVersions(): void
+    {
+        $plugin = DataKeeper::$plugin;
+        if ($this->last() === null) {
+            return;
+        }
+        $top = $plugin->versions->top(5);
+        $figures = [
+            'revisions' => (int)(new Query())->from(Table::REVISIONS)->count(),
+            'maxRevisions' => $top[0]['n'] ?? 0,
+        ];
+        $versionAge = ['year1' => $plugin->versions->olderThan(365), 'year2' => $plugin->versions->olderThan(730)];
+        $this->patch(function(array $last) use ($figures, $top, $versionAge) {
+            $last['figures'] = array_merge($last['figures'], $figures);
+            $last['topRevisions'] = $top;
+            $last['versionAge'] = $versionAge;
+            return $last;
+        }, $figures);
+    }
+
+    /**
+     * Counts one folder again (`backups`, `logs`, …) and puts it into the stored measurement. Called after files were
+     * removed from it. Does nothing before the first measurement or for a folder the measurement does not have.
+     */
+    public function refreshFolder(string $key): void
+    {
+        $last = $this->last();
+        $folder = $this->folders()[$key] ?? null;
+        if ($last === null || $folder === null || !isset($last['folders'][$key])) {
+            return;
+        }
+        $figures = isset($last['figures'][$key]) ? [$key => $folder['mb']] : [];
+        $this->patch(function(array $last) use ($key, $folder, $figures) {
+            $last['folders'][$key] = $folder;
+            $last['figures'] = array_merge($last['figures'], $figures);
+            return $last;
+        }, $figures);
+    }
+
+    /**
+     * Changes the stored measurement and, for the day it was taken, the key figures in the course.
+     *
+     * @param callable(array): array $change receives the last measurement, returns the changed one
+     * @param array<string, int|float> $figures the key figures that changed
+     */
+    private function patch(callable $change, array $figures): void
+    {
+        DataKeeper::$plugin->store->update(function(array $data) use ($change, $figures) {
+            if (!isset($data['last'])) {
+                return $data;
+            }
+            $data['last'] = $change($data['last']);
+            $date = $data['last']['date'] ?? null;
+            if ($date !== null && isset($data['history'][$date])) {
+                $data['history'][$date] = array_merge($data['history'][$date], $figures);
+            }
+            return $data;
+        });
     }
 
     /** The last measurement (null: never measured). */

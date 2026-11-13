@@ -3,7 +3,6 @@
 ## Open
 
 - [ ] Add the plugin in the Craft Console and submit it for approval (texts: `docs/store-listing.md`)
-- [ ] Release the card icons: move `## Unreleased` in `CHANGELOG.md` to a dated version and tag it
 - [ ] Register the package on Packagist (optional for the Plugin Store, needed for `composer require`)
 
 ## Done
@@ -18,4 +17,4 @@
 - [x] Icon and nav icon
 - [x] Screenshots (overview, cleanup, versions, settings) with made-up data
 - [x] First commit pushed to GitHub, `v1.0.0` tagged (2026-11-13)
-- [x] Icons on the key figure cards of the overview
+- [x] Icons on the key figure cards of the overview, released as `v1.1.0` (2026-11-13)

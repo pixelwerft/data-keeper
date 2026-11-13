@@ -1,0 +1,23 @@
+{# numbers in the locale of the signed-in user, one decimal only where there is one #}
+{% macro num(n) %}{{ n is null ? '–' : n|number(n == n|round ? 0 : 1) }}{% endmacro %}
+
+{# a Unix timestamp as a short date #}
+{% macro day(unix) %}{{ unix ? unix|date('short') : '–' }}{% endmacro %}
+
+{# the label of a level #}
+{% macro level(level) %}
+  {%- switch level -%}
+    {%- case 'alert' -%}{{ 'Act now'|t('data-keeper') }}
+    {%- case 'warn' -%}{{ 'Keep an eye on it'|t('data-keeper') }}
+    {%- case 'info' -%}{{ 'Info'|t('data-keeper') }}
+    {%- default -%}{{ 'OK'|t('data-keeper') }}
+  {%- endswitch -%}
+{% endmacro %}
+
+{# the data-minimisation message for the site owner #}
+{% macro minimisation() %}
+  <aside class="dk-callout" role="note">
+    <strong>{{ 'Store only what you need.'|t('data-keeper') }}</strong>
+    {{ 'Data that no longer has a purpose should go: the less a site keeps, the less can leak, and the smaller backups and the privacy policy get. For each kind of data decide how long it is kept, switch the matching cleanup rule on, and write that period into your privacy policy. Nothing here is removed by itself – a rule has to be switched on and a run confirmed.'|t('data-keeper') }}
+  </aside>
+{% endmacro %}

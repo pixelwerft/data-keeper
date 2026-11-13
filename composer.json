@@ -1,0 +1,77 @@
+{
+  "name": "pixelwerft/data-keeper",
+  "description": "See how much your Craft site stores and how fast it grows – with opt-in retention cleanup, version clearing, notifications and a status endpoint.",
+  "type": "craft-plugin",
+  "license": "MIT",
+  "keywords": [
+    "craft",
+    "cms",
+    "craftcms",
+    "craft-plugin",
+    "housekeeping",
+    "revisions",
+    "database",
+    "cleanup",
+    "retention",
+    "data-minimisation",
+    "gdpr",
+    "monitoring"
+  ],
+  "support": {
+    "email": "ahoi@pixelwerft.ch",
+    "issues": "https://github.com/pixelwerft/data-keeper/issues",
+    "source": "https://github.com/pixelwerft/data-keeper",
+    "docs": "https://github.com/pixelwerft/data-keeper/blob/main/README.md"
+  },
+  "authors": [
+    {
+      "name": "pixelwerft",
+      "homepage": "https://pixelwerft.ch"
+    }
+  ],
+  "require": {
+    "php": ">=8.2",
+    "craftcms/cms": "^5.0.0"
+  },
+  "require-dev": {
+    "craftcms/ecs": "dev-main",
+    "craftcms/phpstan": "dev-main",
+    "phpstan/phpstan": "^2.0",
+    "phpunit/phpunit": "^11.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "pixelwerft\\datakeeper\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "pixelwerft\\datakeeper\\tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "check-cs": "ecs check --ansi",
+    "fix-cs": "ecs check --ansi --fix",
+    "phpstan": "phpstan --memory-limit=1G",
+    "test": "phpunit"
+  },
+  "extra": {
+    "handle": "data-keeper",
+    "name": "Data Keeper",
+    "developer": "pixelwerft",
+    "developerUrl": "https://pixelwerft.ch",
+    "documentationUrl": "https://github.com/pixelwerft/data-keeper/blob/main/README.md",
+    "changelogUrl": "https://raw.githubusercontent.com/pixelwerft/data-keeper/main/CHANGELOG.md",
+    "class": "pixelwerft\\datakeeper\\DataKeeper"
+  },
+  "config": {
+    "sort-packages": true,
+    "platform": {
+      "php": "8.2"
+    },
+    "allow-plugins": {
+      "yiisoft/yii2-composer": true,
+      "craftcms/plugin-installer": true
+    }
+  }
+}

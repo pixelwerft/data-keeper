@@ -1,0 +1,235 @@
+{# Plugin settings. Everything that deletes or notifies is off by default. Rendered inside Craft's settings form, so
+   field names are namespaced under settings[...] automatically. #}
+{% import '_includes/forms' as forms %}
+{% do view.registerAssetBundle('pixelwerft\\datakeeper\\web\\assets\\cp\\DataKeeperAsset') %}
+
+{% macro warn(overridden, name) %}{{ name in overridden ? 'This setting is overridden in config/data-keeper.php.'|t('data-keeper') : null }}{% endmacro %}
+{% import _self as s %}
+
+<div class="dk">
+  <aside class="dk-callout" role="note">
+    <strong>{{ 'Nothing is switched on by default.'|t('data-keeper') }}</strong>
+    {{ 'The cleanup rules and the notifications only act after you switch them on here. The plugin never deletes anything on its own.'|t('data-keeper') }}
+  </aside>
+
+  <h2>{{ 'Measuring'|t('data-keeper') }}</h2>
+
+  {{ forms.textField({
+    label: 'Keep daily key figures for (days)'|t('data-keeper'),
+    id: 'historyDays', name: 'historyDays', type: 'number', size: 6, min: 30,
+    value: settings.historyDays, errors: settings.getErrors('historyDays'),
+    disabled: 'historyDays' in overridden, warning: s.warn(overridden, 'historyDays'),
+  }) }}
+
+  <h3>{{ 'Limits of the key figures'|t('data-keeper') }}</h3>
+  <p class="light">{{ 'From the first value on a figure shows «Keep an eye on it», from the second «Act now». Empty uses the default. 0 switches the check off.'|t('data-keeper') }}
+    {% if 'limits' in overridden %}<br><strong>{{ 'This setting is overridden in config/data-keeper.php.'|t('data-keeper') }}</strong>{% endif %}</p>
+  <table class="data dk-limits">
+    <thead><tr><th>{{ 'Figure'|t('data-keeper') }}</th><th>{{ 'Keep an eye on it from'|t('data-keeper') }}</th><th>{{ 'Act now from'|t('data-keeper') }}</th></tr></thead>
+    <tbody>
+      {% for key, figure in figures %}
+        <tr>
+          <th scope="row">{{ figure.label|t('data-keeper') }}{% if figure.unit %} <span class="light">({{ figure.unit }})</span>{% endif %}</th>
+          {# empty = the default, shown as the placeholder, so a changed default reaches everyone who did not set an own value #}
+          <td>{{ forms.text({ name: 'limits[' ~ key ~ '][warn]', type: 'number', size: 10, min: 0, value: settings.limits[key].warn ?? null, placeholder: figure.warn, disabled: 'limits' in overridden }) }}</td>
+          <td>{{ forms.text({ name: 'limits[' ~ key ~ '][alert]', type: 'number', size: 10, min: 0, value: settings.limits[key].alert ?? null, placeholder: figure.alert, disabled: 'limits' in overridden }) }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <hr>
+  <h2>{{ 'Retention cleanup'|t('data-keeper') }}</h2>
+  <p class="light">{{ 'Each rule is off until you switch it on. On the «Cleanup» page you see what a rule would remove before anything is deleted; removing needs a confirmation there, or --apply on the command line.'|t('data-keeper') }}</p>
+
+  {{ forms.lightswitchField({
+    label: 'Saved versions'|t('data-keeper'),
+    instructions: 'Keep only the newest versions of every entry, or remove old ones by age.'|t('data-keeper'),
+    id: 'revisionsEnabled', name: 'revisionsEnabled', on: settings.revisionsEnabled,
+    disabled: 'revisionsEnabled' in overridden, warning: s.warn(overridden, 'revisionsEnabled'),
+  }) }}
+  {{ forms.selectField({
+    label: 'What to remove'|t('data-keeper'),
+    id: 'revisionsMode', name: 'revisionsMode', value: settings.revisionsMode,
+    options: [
+      { value: 'count', label: 'All but the newest versions of every entry'|t('data-keeper') },
+      { value: 'age', label: 'Versions older than a number of days'|t('data-keeper') },
+    ],
+    disabled: 'revisionsMode' in overridden, warning: s.warn(overridden, 'revisionsMode'),
+  }) }}
+  {{ forms.textField({
+    label: 'Newest versions always kept (per entry)'|t('data-keeper'),
+    id: 'revisionsKeep', name: 'revisionsKeep', type: 'number', size: 6, min: 1,
+    value: settings.revisionsKeep, errors: settings.getErrors('revisionsKeep'),
+    disabled: 'revisionsKeep' in overridden, warning: s.warn(overridden, 'revisionsKeep'),
+  }) }}
+  {{ forms.lightswitchField({
+    label: 'Also keep the very first version'|t('data-keeper'),
+    id: 'revisionsKeepFirst', name: 'revisionsKeepFirst', on: settings.revisionsKeepFirst,
+    disabled: 'revisionsKeepFirst' in overridden, warning: s.warn(overridden, 'revisionsKeepFirst'),
+  }) }}
+  {{ forms.textField({
+    label: 'Remove versions older than (days)'|t('data-keeper'),
+    instructions: 'Only used for «Versions older than a number of days». 365 is a year, 730 two years. The newest versions above are always kept.'|t('data-keeper'),
+    id: 'revisionsMaxAgeDays', name: 'revisionsMaxAgeDays', type: 'number', size: 6, min: 30,
+    value: settings.revisionsMaxAgeDays, errors: settings.getErrors('revisionsMaxAgeDays'),
+    disabled: 'revisionsMaxAgeDays' in overridden, warning: s.warn(overridden, 'revisionsMaxAgeDays'),
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Database backups'|t('data-keeper'),
+    instructions: 'Keep only the newest backups in the backup folder.'|t('data-keeper'),
+    id: 'backupsEnabled', name: 'backupsEnabled', on: settings.backupsEnabled,
+    disabled: 'backupsEnabled' in overridden, warning: s.warn(overridden, 'backupsEnabled'),
+  }) }}
+  {{ forms.textField({
+    label: 'Backups kept'|t('data-keeper'),
+    id: 'backupsKeep', name: 'backupsKeep', type: 'number', size: 6, min: 1,
+    value: settings.backupsKeep, errors: settings.getErrors('backupsKeep'),
+    disabled: 'backupsKeep' in overridden, warning: s.warn(overridden, 'backupsKeep'),
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Log files'|t('data-keeper'),
+    instructions: 'Remove log files that have not been written to for a while.'|t('data-keeper'),
+    id: 'logsEnabled', name: 'logsEnabled', on: settings.logsEnabled,
+    disabled: 'logsEnabled' in overridden, warning: s.warn(overridden, 'logsEnabled'),
+  }) }}
+  {{ forms.textField({
+    label: 'Remove log files older than (days)'|t('data-keeper'),
+    id: 'logsKeepDays', name: 'logsKeepDays', type: 'number', size: 6, min: 1,
+    value: settings.logsKeepDays, errors: settings.getErrors('logsKeepDays'),
+    disabled: 'logsKeepDays' in overridden, warning: s.warn(overridden, 'logsKeepDays'),
+  }) }}
+
+  {{ forms.lightswitchField({
+    label: 'Change records'|t('data-keeper'),
+    instructions: 'Craft records which field was changed when, to merge drafts. For entries without drafts these records are not needed and pile up; Craft’s own garbage collection removes them only now and then. Entries with drafts and content are never touched.'|t('data-keeper'),
+    id: 'changeRecordsEnabled', name: 'changeRecordsEnabled', on: settings.changeRecordsEnabled,
+    disabled: 'changeRecordsEnabled' in overridden, warning: s.warn(overridden, 'changeRecordsEnabled'),
+  }) }}
+  {{ forms.textField({
+    label: 'Remove change records older than (days)'|t('data-keeper'),
+    id: 'changeRecordsKeepDays', name: 'changeRecordsKeepDays', type: 'number', size: 6, min: 30,
+    value: settings.changeRecordsKeepDays, errors: settings.getErrors('changeRecordsKeepDays'),
+    disabled: 'changeRecordsKeepDays' in overridden, warning: s.warn(overridden, 'changeRecordsKeepDays'),
+  }) }}
+
+  {{ forms.editableTableField({
+    label: 'Other tables'|t('data-keeper'),
+    instructions: 'Remove rows older than a number of days from a table that is not one of Craft’s own – an access log, a tracking table, a plugin’s history. Table name without the prefix; the column must be a date column. At least 7 days.'|t('data-keeper'),
+    id: 'customRules', name: 'customRules',
+    cols: {
+      table: { type: 'singleline', heading: 'Table'|t('data-keeper'), code: true },
+      column: { type: 'singleline', heading: 'Date column'|t('data-keeper'), code: true },
+      keepDays: { type: 'number', heading: 'Keep (days)'|t('data-keeper'), width: '110px' },
+      enabled: { type: 'lightswitch', heading: 'On'|t('data-keeper'), thin: true },
+    },
+    rows: settings.customRuleRows(),
+    allowAdd: true, allowDelete: true, allowReorder: false,
+    addRowLabel: 'Add a table'|t('data-keeper'),
+    errors: settings.getErrors('customRules'),
+    disabled: 'customRules' in overridden, warning: s.warn(overridden, 'customRules'),
+  }) }}
+
+  <hr>
+  <h2>{{ 'Notifications'|t('data-keeper') }}</h2>
+  <p class="light">{{ 'Switch on the topics you want to hear about. What a topic finds is available as a notice in the control panel, as a message that is pushed out when something new comes up, and at the status endpoint.'|t('data-keeper') }}</p>
+
+  <h3>{{ 'Topics'|t('data-keeper') }}</h3>
+  {{ forms.lightswitchField({
+    label: 'A key figure is getting too big'|t('data-keeper'),
+    id: 'notifyLevels', name: 'notifyLevels', on: settings.notifyLevels,
+    disabled: 'notifyLevels' in overridden, warning: s.warn(overridden, 'notifyLevels'),
+  }) }}
+  {{ forms.selectField({
+    label: 'From which level'|t('data-keeper'),
+    id: 'minLevel', name: 'minLevel', value: settings.minLevel,
+    options: [{ value: 'warn', label: 'Keep an eye on it'|t('data-keeper') }, { value: 'alert', label: 'Act now'|t('data-keeper') }],
+    disabled: 'minLevel' in overridden, warning: s.warn(overridden, 'minLevel'),
+  }) }}
+  {{ forms.lightswitchField({
+    label: 'The site has not been measured for a while'|t('data-keeper'),
+    instructions: 'Shown in the control panel and at the endpoint; it cannot be pushed because nothing runs when the measuring stops.'|t('data-keeper'),
+    id: 'notifyStale', name: 'notifyStale', on: settings.notifyStale,
+    disabled: 'notifyStale' in overridden, warning: s.warn(overridden, 'notifyStale'),
+  }) }}
+  {{ forms.textField({
+    label: 'Not measured for (days)'|t('data-keeper'),
+    id: 'staleAfterDays', name: 'staleAfterDays', type: 'number', size: 6, min: 1,
+    value: settings.staleAfterDays, errors: settings.getErrors('staleAfterDays'),
+    disabled: 'staleAfterDays' in overridden, warning: s.warn(overridden, 'staleAfterDays'),
+  }) }}
+  {{ forms.lightswitchField({
+    label: 'A cleanup finished or failed'|t('data-keeper'),
+    id: 'notifyCleanup', name: 'notifyCleanup', on: settings.notifyCleanup,
+    disabled: 'notifyCleanup' in overridden, warning: s.warn(overridden, 'notifyCleanup'),
+  }) }}
+  {{ forms.lightswitchField({
+    label: 'A lot of old data is waiting'|t('data-keeper'),
+    instructions: 'A retention rule (on or off) could remove many records.'|t('data-keeper'),
+    id: 'notifyBacklog', name: 'notifyBacklog', on: settings.notifyBacklog,
+    disabled: 'notifyBacklog' in overridden, warning: s.warn(overridden, 'notifyBacklog'),
+  }) }}
+  {{ forms.textField({
+    label: 'Many means at least (items per rule)'|t('data-keeper'),
+    id: 'backlogItems', name: 'backlogItems', type: 'number', size: 8, min: 1,
+    value: settings.backlogItems, errors: settings.getErrors('backlogItems'),
+    disabled: 'backlogItems' in overridden, warning: s.warn(overridden, 'backlogItems'),
+  }) }}
+
+  <h3>{{ 'Post a message'|t('data-keeper') }}</h3>
+  {{ forms.lightswitchField({
+    label: 'Notice in the control panel'|t('data-keeper'),
+    instructions: 'For everyone who may open Data Keeper.'|t('data-keeper'),
+    id: 'channelCp', name: 'channelCp', on: settings.channelCp,
+    disabled: 'channelCp' in overridden, warning: s.warn(overridden, 'channelCp'),
+  }) }}
+  {{ forms.lightswitchField({
+    label: 'E-mail'|t('data-keeper'),
+    id: 'channelEmail', name: 'channelEmail', on: settings.channelEmail,
+    disabled: 'channelEmail' in overridden, warning: s.warn(overridden, 'channelEmail'),
+  }) }}
+  {{ forms.textField({
+    label: 'Recipients'|t('data-keeper'),
+    instructions: 'Comma-separated e-mail addresses.'|t('data-keeper'),
+    id: 'emailRecipients', name: 'emailRecipients', value: settings.emailRecipients, errors: settings.getErrors('emailRecipients'),
+    disabled: 'emailRecipients' in overridden, warning: s.warn(overridden, 'emailRecipients'),
+  }) }}
+  {{ forms.lightswitchField({
+    label: 'Webhook'|t('data-keeper'),
+    instructions: 'A JSON message is posted to the address below.'|t('data-keeper'),
+    id: 'channelWebhook', name: 'channelWebhook', on: settings.channelWebhook,
+    disabled: 'channelWebhook' in overridden, warning: s.warn(overridden, 'channelWebhook'),
+  }) }}
+  {{ forms.autosuggestField({
+    label: 'Webhook URL'|t('data-keeper'),
+    id: 'webhookUrl', name: 'webhookUrl', suggestEnvVars: true, value: settings.webhookUrl, errors: settings.getErrors('webhookUrl'),
+    disabled: 'webhookUrl' in overridden, warning: s.warn(overridden, 'webhookUrl'),
+  }) }}
+  {{ forms.autosuggestField({
+    label: 'Webhook secret'|t('data-keeper'),
+    instructions: 'Optional. Signs the message (HMAC SHA-256 in the header X-Data-Keeper-Signature).'|t('data-keeper'),
+    id: 'webhookSecret', name: 'webhookSecret', suggestEnvVars: true, value: settings.webhookSecret,
+    disabled: 'webhookSecret' in overridden, warning: s.warn(overridden, 'webhookSecret'),
+  }) }}
+  {{ forms.textField({
+    label: 'Remind again after (days)'|t('data-keeper'),
+    instructions: 'A message is sent when something is new or gets worse, and again after this many days while it stays. 0: only once.'|t('data-keeper'),
+    id: 'remindAfterDays', name: 'remindAfterDays', type: 'number', size: 6, min: 0,
+    value: settings.remindAfterDays, errors: settings.getErrors('remindAfterDays'),
+    disabled: 'remindAfterDays' in overridden, warning: s.warn(overridden, 'remindAfterDays'),
+  }) }}
+
+  <h3>{{ 'Status endpoint'|t('data-keeper') }}</h3>
+  {{ forms.autosuggestField({
+    label: 'Token'|t('data-keeper'),
+    instructions: 'A monitoring tool can ask for the current status at the address below. Empty switches the endpoint off. At least 24 characters; use an environment variable.'|t('data-keeper'),
+    id: 'statusToken', name: 'statusToken', suggestEnvVars: true, value: settings.statusToken, errors: settings.getErrors('statusToken'),
+    disabled: 'statusToken' in overridden, warning: s.warn(overridden, 'statusToken'),
+  }) }}
+  <p class="light">
+    {{ 'Address'|t('data-keeper') }}: <code>{{ statusUrl }}</code><br>
+    {{ 'Send the token as «Authorization: Bearer <token>» (or, if the tool can only call a URL, as ?token=). Add ?fail=alert (or ?fail=warn) to get an HTTP 503 from that level on.'|t('data-keeper') }}
+  </p>
+</div>

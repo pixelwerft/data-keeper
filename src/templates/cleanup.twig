@@ -1,0 +1,103 @@
+{# The cleanup page: what every retention rule would remove right now (also the rules that are switched off), and
+   starting a run in the background. Nothing is removed by opening this page. #}
+{% extends '_layouts/cp' %}
+{% import 'data-keeper/_macros' as m %}
+{% do view.registerAssetBundle('pixelwerft\\datakeeper\\web\\assets\\cp\\DataKeeperAsset') %}
+
+{% set title = 'Cleanup'|t('data-keeper') %}
+{% set selectedSubnavItem = 'cleanup' %}
+
+{% block content %}
+  <div class="dk">
+    {{ m.minimisation() }}
+
+    <p class="dk-lead">{{ 'Retention rules remove data that is older than you decide. Every rule is off until you switch it on in the settings. Below you see what each rule would remove right now – whether it is on or not.'|t('data-keeper') }}
+      {% if isAdmin and craft.app.config.general.allowAdminChanges %}<a href="{{ cpUrl('settings/plugins/data-keeper') }}">{{ 'Open the settings'|t('data-keeper') }}</a>{% endif %}</p>
+
+    <table class="data fullwidth dk-rules">
+      <thead>
+        <tr>
+          <th>{{ 'Rule'|t('data-keeper') }}</th>
+          <th>{{ 'State'|t('data-keeper') }}</th>
+          <th class="dk-num">{{ 'Would remove'|t('data-keeper') }}</th>
+          <th>{{ 'Oldest'|t('data-keeper') }}</th>
+          <th>{{ 'Examples'|t('data-keeper') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for id, item in previews %}
+          {% set rule = item.rule %}
+          {% set p = item.preview %}
+          <tr>
+            <td><strong>{{ rule.label }}</strong><br><span class="light">{{ rule.description }}</span></td>
+            <td><span class="dk-state dk-state-{{ rule.enabled ? 'on' : 'off' }}">{{ rule.enabled ? 'On'|t('data-keeper') : 'Off'|t('data-keeper') }}</span></td>
+            <td class="dk-num">{{ rule.amount(p.count) }}{% if p.mb is not null %}<br><span class="light">{{ m.num(p.mb) }} MB</span>{% endif %}</td>
+            <td class="light">{{ m.day(p.oldest) }}</td>
+            <td class="light">
+              {% if p.sample|length %}
+                <ul class="dk-plain">{% for s in p.sample %}<li>{{ s }}</li>{% endfor %}</ul>
+              {% else %}–{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if enabledCount == 0 %}
+      <p class="dk-note">{{ 'No rule is switched on, so a run would remove nothing.'|t('data-keeper') }}</p>
+    {% elseif wouldRemove == 0 %}
+      <p class="dk-note">{{ 'Nothing to remove right now.'|t('data-keeper') }}</p>
+    {% else %}
+      <form method="post" accept-charset="UTF-8" class="dk-run">
+        {{ csrfInput() }}
+        {{ actionInput('data-keeper/cleanup/run') }}
+        <input type="hidden" name="confirmedCount" value="{{ wouldRemove }}">
+        <h2>{{ 'Run the cleanup'|t('data-keeper') }}</h2>
+        <p>{{ '{rules, plural, one{The rule that is on will} other{The # rules that are on will}} permanently remove {count} items. This cannot be undone – make sure there is a backup you trust.'|t('data-keeper', { rules: enabledCount, count: wouldRemove|number }) }}</p>
+        <label class="dk-check"><input type="checkbox" required> {{ 'I understand that this is permanent.'|t('data-keeper') }}</label>
+        <button type="submit" class="btn submit">{{ 'Remove {count} items'|t('data-keeper', { count: wouldRemove|number }) }}</button>
+      </form>
+    {% endif %}
+
+    {% if retentions|length %}
+      <section>
+        <h2>{{ 'For your privacy policy'|t('data-keeper') }}</h2>
+        <p class="light">{{ 'These retention periods apply to the rules that are on. Copy them into your privacy policy and check them against what you promise there.'|t('data-keeper') }}</p>
+        <ul>{% for line in retentions %}<li>{{ line }}</li>{% endfor %}</ul>
+      </section>
+    {% endif %}
+
+    <section>
+      <h2>{{ 'Last runs'|t('data-keeper') }}</h2>
+      {% if runs|length %}
+        <table class="data fullwidth">
+          <thead><tr><th>{{ 'Date'|t('data-keeper') }}</th><th>{{ 'Started from'|t('data-keeper') }}</th><th class="dk-num">{{ 'Removed'|t('data-keeper') }}</th><th>{{ 'Result'|t('data-keeper') }}</th></tr></thead>
+          <tbody>
+            {% for run in runs %}
+              <tr>
+                <td>{{ run.at|datetime('short') }}</td>
+                <td>{{ run.source }}</td>
+                <td class="dk-num">{{ m.num(run.removed) }}</td>
+                <td>
+                  {% if run.ok %}{{ 'OK'|t('data-keeper') }}{% else %}<span class="error">{{ 'Failed'|t('data-keeper') }}</span>{% endif %}
+                  <span class="light">
+                    {% for id, result in run.results %}{% if result.status != 'off' %}{{ result.label }}: {{ result.status == 'done' ? result.removed : (result.status == 'changed' ? 'skipped, the numbers changed'|t('data-keeper') : result.error) }}{{ not loop.last ? ' · ' }}{% endif %}{% endfor %}
+                  </span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="light">{{ 'No cleanup has run yet.'|t('data-keeper') }}</p>
+      {% endif %}
+    </section>
+
+    <section>
+      <h2>{{ 'From the command line'|t('data-keeper') }}</h2>
+      <p class="light">{{ 'For a daily cron job. Without --apply every cleanup is a dry run.'|t('data-keeper') }}</p>
+      <pre class="dk-code">php craft data-keeper/cleanup           # dry run
+php craft data-keeper/run --apply       # cleanup, then measure</pre>
+    </section>
+  </div>
+{% endblock %}

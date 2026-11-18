@@ -85,10 +85,63 @@ class DataKeeper extends Plugin
             RequestKey::take();
         }
 
+        if (Craft::$app->getRequest()->getIsCpRequest()) {
+            // the plugin's templates are only used in the control panel
+            $this->dropStaleCompiledTemplates();
+        }
+
         $this->registerUrlRules();
         $this->registerPermissions();
         $this->registerCpAlert();
         $this->registerNavPosition();
+    }
+
+    /**
+     * Makes sure the control panel never works with compiled copies of the plugin's templates from another version.
+     *
+     * Craft keeps the compiled copy of a template as long as the template file is not newer than the copy. An update
+     * installs the files with the date of the release, which can be older than a copy that was compiled from the
+     * previous version in the meantime. Craft then goes on using that copy – for some templates and not for others,
+     * and a page fails with «Macro … is not defined» or shows the old version of itself.
+     *
+     * So the plugin remembers which templates it last saw (its version and the dates of the template files). When
+     * that changes, the compiled templates are cleared once – the same as «Compiled templates» in Craft's «Caches»
+     * utility – and Craft builds them again from the files that are there now.
+     *
+     * Clearing alone is not enough where PHP's OPcache does not look at the files again (or only rarely): a template
+     * is compiled into a file of the same name as before, and OPcache goes on running what it remembers for that
+     * name. So every compiled file is taken out of OPcache first.
+     */
+    private function dropStaleCompiledTemplates(): void
+    {
+        try {
+            $seen = $this->getVersion();
+            foreach (glob($this->getBasePath() . '/templates/*.twig') ?: [] as $file) {
+                $seen .= '|' . basename($file) . ':' . filemtime($file);
+            }
+            $seen = md5($seen);
+
+            $marker = dirname($this->store->path()) . '/templates-seen';
+            if (@file_get_contents($marker) === $seen) {
+                return;
+            }
+            // only if it can be remembered: otherwise every request would clear the templates again
+            FileHelper::createDirectory(dirname($marker));
+            if (@file_put_contents($marker, $seen, LOCK_EX) === false) {
+                Craft::warning('Could not remember the state of the templates. Is the storage folder writable?', __METHOD__);
+                return;
+            }
+            $compiled = Craft::$app->getPath()->getCompiledTemplatesPath(false);
+            if (is_dir($compiled)) {
+                foreach (FileHelper::findFiles($compiled, ['only' => ['*.php']]) as $file) {
+                    FileHelper::invalidate($file);
+                }
+                FileHelper::clearDirectory($compiled);
+            }
+            Craft::info('The templates of the plugin changed: cleared the compiled templates.', __METHOD__);
+        } catch (\Throwable $e) {
+            Craft::warning('Could not check the compiled templates: ' . $e->getMessage(), __METHOD__);
+        }
     }
 
     public static function t(string $message, array $params = []): string

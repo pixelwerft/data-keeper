@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.1 - 2026-11-19
+
+### Fixed
+- After an update the overview could fail with «Macro "chart" is not defined», or pages kept showing their previous
+  version: Craft went on using compiled copies of the plugin's templates from the version before, because an update
+  installs the template files with the older date of the release. The plugin now notices when its templates changed
+  and clears the compiled templates once, by itself. (On a site that shows this with 1.6.0, updating is enough.)
+
 ## 1.6.0 - 2026-11-18
 
 ### Added

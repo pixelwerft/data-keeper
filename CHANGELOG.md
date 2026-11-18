@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.2 - 2026-11-19
+
+### Added
+- Queue watch: Data Keeper says when Craft’s queue is in trouble – jobs failed, a job hangs, or jobs wait and nothing
+  is being worked off (`queueWaitMinutes`, 15 by default). On the overview and the «Information» tab, in the answer to
+  a remote query (`queue`) and, with the new topic «The queue is in trouble» (`notifyQueue`), in the notifications and
+  at the status endpoint.
+- «Files» on the «Backups» card: tick several backup files and delete them together.
+- «Last measurements»: tick several measurements and delete them together (admins). The latest measurement stays.
+- «Last actions»: admins can take entries out of the list, one by one or several ticked ones together. The list
+  shows the last ten.
+
+### Changed
+- If a part of the overview cannot be built – the statistics, the running actions or the last actions – the page is
+  shown without it and says so, instead of failing as a whole. The reason goes to the Craft log.
+
 ## 1.6.1 - 2026-11-19
 
 ### Fixed

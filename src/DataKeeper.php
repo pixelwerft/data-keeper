@@ -21,6 +21,7 @@ use pixelwerft\datakeeper\services\Cleanup;
 use pixelwerft\datakeeper\services\Maintenance;
 use pixelwerft\datakeeper\services\Measurements;
 use pixelwerft\datakeeper\services\Notifications;
+use pixelwerft\datakeeper\services\QueueHealth;
 use pixelwerft\datakeeper\services\Remote;
 use pixelwerft\datakeeper\services\Store;
 use pixelwerft\datakeeper\services\Versions;
@@ -37,6 +38,7 @@ use yii\base\Event;
  * @property-read Store $store
  * @property-read Maintenance $maintenance
  * @property-read Remote $remote
+ * @property-read QueueHealth $queueHealth
  * @method Settings getSettings()
  */
 class DataKeeper extends Plugin
@@ -69,6 +71,7 @@ class DataKeeper extends Plugin
                 'notifications' => Notifications::class,
                 'maintenance' => Maintenance::class,
                 'remote' => Remote::class,
+                'queueHealth' => QueueHealth::class,
             ],
         ];
     }

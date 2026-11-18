@@ -101,6 +101,13 @@ class Notifications extends Component
             }
         }
 
+        if ($settings->notifyQueue) {
+            // read now, not from the measurement: a queue that hangs may be the reason nothing was measured
+            foreach ($plugin->queueHealth->conditions() as $item) {
+                $items[] = $item;
+            }
+        }
+
         if ($settings->notifyCleanup) {
             $cleanup = $plugin->store->get('lastCleanup');
             if ($cleanup && $cleanup['error']) {

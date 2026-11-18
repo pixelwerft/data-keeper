@@ -20,3 +20,5 @@
   measurements
 - 1.6.0 – statistics (a chart per key figure), running status of actions, compressing backups, log files to keep,
   remote monitoring allowed per environment on the information tab
+- 1.6.1 – compiled templates cleared after an update
+- 1.6.2 – queue watch, deleting several rows at once, an overview that survives a failing part

@@ -209,6 +209,8 @@ class Remote extends Component
             'site' => Craft::$app->getSites()->getPrimarySite()->getName(),
             'lastMeasurement' => $this->lastMeasurement(),
             'craftCms' => $this->craftCms(),
+            // as it is right now, unlike the measurement: null if the queue is not Craft's own or cannot be read
+            'queue' => DataKeeper::$plugin->queueHealth->forRemote(),
         ];
         if ($details) {
             $data['details'] = $this->details($daily);

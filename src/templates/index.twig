@@ -21,6 +21,13 @@
 
 {% block content %}
   <div class="dk">
+  {# a part that could not be built is left out; the page says so instead of failing as a whole #}
+  {% if failedParts|length %}
+    <p class="dk-attention dk-attention-alert" role="alert">
+      <strong>{{ 'A part of this page could not be built: {parts}.'|t('data-keeper', { parts: failedParts|join(', ') }) }}</strong>
+      <span class="light">{{ 'The rest is shown as usual. The reason is in the Craft log (storage/logs, the web log of today); please pass it on to whoever maintains the site.'|t('data-keeper') }}</span>
+    </p>
+  {% endif %}
   <div id="dk-overview">
     {{ m.minimisation() }}
 
@@ -238,14 +245,30 @@
       </section>
     </div>
 
+    {# what the actions of the cards did. Admins can take entries out of the list, one by one or the ticked ones #}
     {% if lastActions|length %}
       <section>
         <h2>{{ 'Last actions'|t('data-keeper') }}</h2>
+        {% if currentUser.admin %}
+          <form method="post" accept-charset="UTF-8" data-dk-batch
+            data-dk-confirm-many="{{ 'Really delete the selected entries ({n}) from the list? What the actions did stays done.'|t('data-keeper', { n: '%n%' }) }}">
+            {{ csrfInput() }}
+            {{ actionInput('data-keeper/default/delete-actions') }}
+        {% endif %}
         <table class="data fullwidth">
-          <thead><tr><th>{{ 'Date'|t('data-keeper') }}</th><th>{{ 'Action'|t('data-keeper') }}</th><th>{{ 'Result'|t('data-keeper') }}</th></tr></thead>
+          <thead>
+            <tr>
+              {% if currentUser.admin %}<th class="dk-pick"><input type="checkbox" data-dk-all aria-label="{{ 'Select all'|t('data-keeper') }}"></th>{% endif %}
+              <th>{{ 'Date'|t('data-keeper') }}</th><th>{{ 'Action'|t('data-keeper') }}</th><th>{{ 'Result'|t('data-keeper') }}</th>
+              {% if currentUser.admin %}<th></th>{% endif %}
+            </tr>
+          </thead>
           <tbody>
             {% for done in lastActions %}
               <tr>
+                {% if currentUser.admin %}
+                  <td class="dk-pick"><input type="checkbox" name="key[]" value="{{ done.key }}" aria-label="{{ 'Select {what}'|t('data-keeper', { what: done.label ~ ', ' ~ done.at|datetime('short') }) }}"></td>
+                {% endif %}
                 <td>{{ done.at|datetime('short') }}</td>
                 <td>{{ done.label }}</td>
                 <td>
@@ -254,33 +277,61 @@
                     <ul class="dk-plain">{% for problem in done.problems %}<li><code>{{ problem }}</code></li>{% endfor %}</ul>
                   {% endif %}
                 </td>
+                {% if currentUser.admin %}
+                  <td class="dk-num">
+                    <button type="submit" name="one" value="{{ done.key }}" class="btn small" data-icon="trash" title="{{ 'Delete'|t('data-keeper') }}"
+                      aria-label="{{ 'Delete {what}'|t('data-keeper', { what: done.label ~ ', ' ~ done.at|datetime('short') }) }}"
+                      data-dk-confirm="{{ 'Really delete this entry ({what}) from the list? What the action did stays done.'|t('data-keeper', { what: done.label ~ ', ' ~ done.at|datetime('short') }) }}"></button>
+                  </td>
+                {% endif %}
               </tr>
             {% endfor %}
           </tbody>
         </table>
+        {% if currentUser.admin %}
+            <div class="dk-batch">
+              <button type="submit" class="btn small" data-dk-many disabled>{{ 'Delete selected'|t('data-keeper') }}</button>
+              <span class="light" data-dk-count data-dk-count-text="{{ '{n} selected'|t('data-keeper', { n: '%n%' }) }}"></span>
+            </div>
+          </form>
+        {% endif %}
       </section>
     {% endif %}
 
-    {# every single measurement of the last days, so a second one on the same day shows up next to the first #}
+    {# every single measurement of the last days, so a second one on the same day shows up next to the first. Admins
+       can delete them, one by one or the ticked ones – all but the latest, which is what the overview shows #}
     {% if recent|length %}
       <section>
         <h2>{{ 'Last measurements'|t('data-keeper') }}</h2>
+        {% if currentUser.admin %}
+          <form method="post" accept-charset="UTF-8" data-dk-batch
+            data-dk-confirm-many="{{ 'Really delete the selected measurements ({n})? This cannot be undone.'|t('data-keeper', { n: '%n%' }) }}">
+            {{ csrfInput() }}
+            {{ actionInput('data-keeper/default/delete-measurements') }}
+        {% endif %}
         <table class="data fullwidth">
-          <thead><tr><th>{{ 'Date'|t('data-keeper') }}</th><th class="dk-num">{{ 'Database MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Versions'|t('data-keeper') }}</th><th class="dk-num">{{ 'Backups MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Logs MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Files MB'|t('data-keeper') }}</th>{% if currentUser.admin %}<th></th>{% endif %}</tr></thead>
+          <thead>
+            <tr>
+              {% if currentUser.admin %}<th class="dk-pick"><input type="checkbox" data-dk-all aria-label="{{ 'Select all'|t('data-keeper') }}"></th>{% endif %}
+              <th>{{ 'Date'|t('data-keeper') }}</th><th class="dk-num">{{ 'Database MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Versions'|t('data-keeper') }}</th><th class="dk-num">{{ 'Backups MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Logs MB'|t('data-keeper') }}</th><th class="dk-num">{{ 'Files MB'|t('data-keeper') }}</th>
+              {% if currentUser.admin %}<th></th>{% endif %}
+            </tr>
+          </thead>
           <tbody>
             {% for row in recent %}
+              {# the latest measurement is what the overview shows: it stays until the site is measured again #}
+              {% set deletable = row.at != measuredAt %}
               <tr>
+                {% if currentUser.admin %}
+                  <td class="dk-pick">{% if deletable %}<input type="checkbox" name="at[]" value="{{ row.at }}" aria-label="{{ 'Select {what}'|t('data-keeper', { what: row.at|datetime('short') }) }}">{% endif %}</td>
+                {% endif %}
                 <td>{{ row.at|datetime('short') }}</td><td class="dk-num">{{ m.num(row.database) }}</td><td class="dk-num">{{ m.num(row.revisions) }}</td><td class="dk-num">{{ m.num(row.backups) }}</td><td class="dk-num">{{ m.num(row.logs) }}</td><td class="dk-num">{{ m.num(row.files ?? 0) }}</td>
                 {% if currentUser.admin %}
                   <td class="dk-num">
-                    {# the latest measurement is what the overview shows: it stays until the site is measured again #}
-                    {% if row.at != measuredAt %}
-                      <form method="post" accept-charset="UTF-8" class="dk-inline-form" onsubmit="return confirm('{{ 'Really delete the measurement of {date}? This cannot be undone.'|t('data-keeper', { date: row.at|datetime('short') })|e('js') }}');">
-                        {{ csrfInput() }}
-                        {{ actionInput('data-keeper/default/delete-measurement') }}
-                        <input type="hidden" name="at" value="{{ row.at }}">
-                        <button type="submit" class="btn small" data-icon="trash" title="{{ 'Delete'|t('data-keeper') }}" aria-label="{{ 'Delete the measurement of {date}'|t('data-keeper', { date: row.at|datetime('short') }) }}"></button>
-                      </form>
+                    {% if deletable %}
+                      <button type="submit" name="one" value="{{ row.at }}" class="btn small" data-icon="trash" title="{{ 'Delete'|t('data-keeper') }}"
+                        aria-label="{{ 'Delete the measurement of {date}'|t('data-keeper', { date: row.at|datetime('short') }) }}"
+                        data-dk-confirm="{{ 'Really delete the measurement of {date}? This cannot be undone.'|t('data-keeper', { date: row.at|datetime('short') }) }}"></button>
                     {% endif %}
                   </td>
                 {% endif %}
@@ -288,6 +339,13 @@
             {% endfor %}
           </tbody>
         </table>
+        {% if currentUser.admin %}
+            <div class="dk-batch">
+              <button type="submit" class="btn small" data-dk-many disabled>{{ 'Delete selected'|t('data-keeper') }}</button>
+              <span class="light" data-dk-count data-dk-count-text="{{ '{n} selected'|t('data-keeper', { n: '%n%' }) }}"></span>
+            </div>
+          </form>
+        {% endif %}
         <p class="light">{{ 'Every measurement of the last {n} days is kept, also several on one day; of older days the last one.'|t('data-keeper', { n: recentDays }) }}
           {% if currentUser.admin %}{{ 'The latest measurement cannot be deleted; measure again to replace it.'|t('data-keeper') }}{% endif %}</p>
       </section>
@@ -366,6 +424,20 @@
         <tr><th scope="row">{{ 'Time zone'|t('data-keeper') }}</th><td>{{ info.timeZone }}</td></tr>
         <tr><th scope="row">{{ 'Measurements file'|t('data-keeper') }}</th><td><code>{{ info.storeFile }}</code></td></tr>
         <tr><th scope="row">{{ 'Last measurement'|t('data-keeper') }}</th><td>{{ measured ? measuredAt|datetime('short') : 'Never measured'|t('data-keeper') }}</td></tr>
+        {# Craft's queue as it is right now #}
+        <tr>
+          <th scope="row">{{ 'Queue'|t('data-keeper') }}</th>
+          <td>
+            {% if queueState %}
+              <span class="dk-state{{ queueState.status == 'ok' ? ' dk-state-on' }}">{{ m.level(queueState.status) }}</span>
+              {{ '{waiting} waiting, {running} running, {failed} failed, {delayed} delayed'|t('data-keeper', { waiting: m.num(queueState.waiting), running: m.num(queueState.running), failed: m.num(queueState.failed), delayed: m.num(queueState.delayed) }) }}
+              {%- if queueState.oldestWaitingMinutes is not null %} · {{ 'the oldest has been waiting for {n, plural, one{# minute} other{# minutes}}'|t('data-keeper', { n: queueState.oldestWaitingMinutes }) }}{% endif %}
+              {% if currentUser.can('utility:queue-manager') %}· <a href="{{ cpUrl('utilities/queue-manager') }}">{{ 'Open the queue manager'|t('data-keeper') }}</a>{% endif %}
+            {% else %}
+              <span class="light">{{ 'The queue of this site cannot be looked into (it is not Craft’s own).'|t('data-keeper') }}</span>
+            {% endif %}
+          </td>
+        </tr>
       </tbody>
     </table>
 

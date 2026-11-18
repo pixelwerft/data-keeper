@@ -9,6 +9,7 @@ use pixelwerft\datakeeper\DataKeeper;
 use pixelwerft\datakeeper\helpers\Chart;
 use pixelwerft\datakeeper\helpers\Growth;
 use pixelwerft\datakeeper\helpers\Levels;
+use pixelwerft\datakeeper\helpers\Picked;
 use yii\web\ForbiddenHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -46,18 +47,32 @@ class DefaultController extends Controller
             'recent' => $plugin->measurements->recent(10),
             'recentDays' => $plugin->measurements::RECENT_DAYS,
             'conditions' => $plugin->notifications->conditions(),
+            // not «queue»: the layout of the control panel sets a variable of that name itself
+            'queueState' => $this->part(DataKeeper::t('Queue'), fn() => $plugin->queueHealth->state(), null),
             'canMeasure' => Craft::$app->getUser()->checkPermission(DataKeeper::PERMISSION_MEASURE),
             'canCleanup' => Craft::$app->getUser()->checkPermission(DataKeeper::PERMISSION_CLEANUP),
             'levels' => [],
             'cardActions' => [],
             'info' => $this->installation(),
-            'lastActions' => $plugin->maintenance->results(),
-            'pending' => $plugin->maintenance->pending(),
-            'justFinished' => $plugin->maintenance->justFinished(),
+            // the parts around the measurement: if one of them cannot be built, the page still loads without it
+            'lastActions' => $this->part(DataKeeper::t('Last actions'), fn() => $plugin->maintenance->results(10), []),
+            'pending' => $this->part(DataKeeper::t('Running actions'), fn() => $plugin->maintenance->pending(), []),
+            'justFinished' => $this->part(DataKeeper::t('Last actions'), fn() => $plugin->maintenance->justFinished(), null),
             'remote' => null,
         ];
+        if (!$plugin->getSettings()->notifyQueue && $variables['queueState']) {
+            // trouble in the queue is always said here, also while its notification topic is off: it is why an
+            // action from a card or a measurement may not run
+            $variables['conditions'] = array_merge($variables['conditions'], $plugin->queueHealth->conditions());
+        }
         $variables['stateToken'] = $plugin->maintenance->stateToken($variables['pending']);
-        $variables += $this->statistics($history, $variables['limits']);
+        $variables += $this->part(DataKeeper::t('Statistics'), fn() => $this->statistics($history, $variables['limits']), [
+            'period' => 'all',
+            'periods' => array_map('strval', array_keys(self::PERIODS)),
+            'charts' => array_fill_keys(array_keys($variables['limits']), null),
+            'days' => 0,
+        ]);
+        $variables['failedParts'] = array_values(array_unique($this->failedParts));
         if ($variables['canCleanup']) {
             $variables['cardActions'] = $plugin->maintenance->byFigure();
         }
@@ -102,6 +117,29 @@ class DefaultController extends Controller
         }
 
         return $this->renderTemplate('data-keeper/index', $variables);
+    }
+
+    /** @var string[] the parts of the overview that could not be built (translated names) */
+    private array $failedParts = [];
+
+    /**
+     * Builds one part of the overview. If that fails – stored data in a shape nobody expected, for example – the
+     * reason goes to the Craft log and the page is shown without the part instead of not at all.
+     *
+     * @template T
+     * @param callable(): T $build
+     * @param T $without what the page gets instead
+     * @return T
+     */
+    private function part(string $name, callable $build, mixed $without): mixed
+    {
+        try {
+            return $build();
+        } catch (\Throwable $e) {
+            Craft::error("The overview could not build «{$name}»: " . $e->getMessage() . ' (' . $e->getFile() . ':' . $e->getLine() . ')', __METHOD__);
+            $this->failedParts[] = $name;
+            return $without;
+        }
     }
 
     /** The periods the «Statistics» tab offers: name => days (null: everything that is stored). */
@@ -279,16 +317,36 @@ class DefaultController extends Controller
         return $element;
     }
 
-    /** Deletes one of the single measurements (admins; the browser asked «really?» before). */
-    public function actionDeleteMeasurement(): Response
+    /**
+     * Deletes single measurements (admins; the browser asked «really?» before): the one whose button was clicked, or
+     * all that were ticked.
+     */
+    public function actionDeleteMeasurements(): Response
     {
         $this->requirePostRequest();
         $this->requireAdmin(false);
-        $at = $this->request->getRequiredBodyParam('at');
-        if (is_string($at) && DataKeeper::$plugin->measurements->deleteRecent($at)) {
-            $this->setSuccessFlash(DataKeeper::t('The measurement was deleted.'));
+        $deleted = DataKeeper::$plugin->measurements->deleteRecents(Picked::from($this->request, 'at'));
+        if ($deleted > 0) {
+            $this->setSuccessFlash(DataKeeper::t('{n, plural, one{# measurement was} other{# measurements were}} deleted.', ['n' => $deleted]));
         } else {
-            $this->setFailFlash(DataKeeper::t('The measurement could not be deleted.'));
+            $this->setFailFlash(DataKeeper::t('Nothing was deleted.'));
+        }
+        return $this->redirect('data-keeper');
+    }
+
+    /**
+     * Takes entries out of the list of the last actions (admins; the browser asked «really?» before): the one whose
+     * button was clicked, or all that were ticked. What the actions did stays done.
+     */
+    public function actionDeleteActions(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin(false);
+        $removed = DataKeeper::$plugin->maintenance->forget(Picked::from($this->request, 'key'));
+        if ($removed > 0) {
+            $this->setSuccessFlash(DataKeeper::t('{n, plural, one{# entry was} other{# entries were}} deleted.', ['n' => $removed]));
+        } else {
+            $this->setFailFlash(DataKeeper::t('Nothing was deleted.'));
         }
         return $this->redirect('data-keeper');
     }

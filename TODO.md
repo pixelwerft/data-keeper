@@ -23,3 +23,5 @@
 - [x] Cache figure, several measurements a day, remote answer with versions and updates, released as `v1.4.0` (2026-11-13)
 - [x] Remote queries hardened, access permission on every page, deleting single measurements, released as `v1.5.0` (2026-11-13)
 - [x] Statistics tab, running status of actions, compressing backups, log files to keep, remote monitoring switch on the Information tab, released as `v1.6.0` (2026-11-18)
+- [x] Compiled templates cleared after an update, released as `v1.6.1` (2026-11-19)
+- [x] Queue watch, deleting several rows at once (backup files, measurements, last actions), an overview that survives a failing part, released as `v1.6.2` (2026-11-19)

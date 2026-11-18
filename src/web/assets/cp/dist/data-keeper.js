@@ -44,6 +44,8 @@
         dialog.content.innerHTML = html;
         dialog.content.classList.remove('dk-dialog-loading');
         dialog.modal.updateSizeAndPosition();
+        // a list with tick boxes inside the dialog starts with nothing ticked and its button off
+        dialog.content.querySelectorAll('form[data-dk-batch]').forEach(count);
         var again = dialog.content.querySelector('input[type="checkbox"][name="remember"]');
         if (again && remembered) {
           again.checked = true;
@@ -178,18 +180,77 @@
   document.addEventListener('input', changed);
   document.addEventListener('change', changed);
 
+  // a list whose rows can be ticked and deleted together: «select all», how many are ticked, and the button that
+  // only works once something is ticked
+  function ticked(form) {
+    return form.querySelectorAll('input[type="checkbox"][name]:checked').length;
+  }
+
+  function count(form) {
+    var boxes = form.querySelectorAll('input[type="checkbox"][name]').length;
+    var n = ticked(form);
+    var many = form.querySelector('[data-dk-many]');
+    var all = form.querySelector('[data-dk-all]');
+    var text = form.querySelector('[data-dk-count]');
+    if (many) {
+      many.disabled = n === 0;
+    }
+    if (all) {
+      all.checked = n > 0 && n === boxes;
+      all.indeterminate = n > 0 && n < boxes;
+      all.disabled = boxes === 0;
+    }
+    if (text) {
+      text.textContent = n ? (text.getAttribute('data-dk-count-text') || '').replace('%n%', n) : '';
+    }
+  }
+
+  document.addEventListener('change', function (event) {
+    var form = event.target.closest ? event.target.closest('form[data-dk-batch]') : null;
+    if (!form) {
+      return;
+    }
+    if (event.target.hasAttribute('data-dk-all')) {
+      form.querySelectorAll('input[type="checkbox"][name]').forEach(function (box) {
+        box.checked = event.target.checked;
+      });
+    }
+    count(form);
+  });
+
+  $(function () {
+    document.querySelectorAll('form[data-dk-batch]').forEach(count);
+  });
+
   // a form that changes something (method POST) shows at once that the click was taken, and is not sent twice
   document.addEventListener('submit', function (event) {
     var form = event.target;
     if (event.defaultPrevented || !form.closest || !form.closest('.dk') || (form.getAttribute('method') || 'get').toLowerCase() !== 'post') {
       return;
     }
+    if (form.hasAttribute('data-dk-batch')) {
+      // the button of one row asks about that row; the button below asks about everything that is ticked
+      var question = event.submitter ? event.submitter.getAttribute('data-dk-confirm') : null;
+      if (!question) {
+        var n = ticked(form);
+        if (!n) {
+          event.preventDefault();
+          return;
+        }
+        question = (form.getAttribute('data-dk-confirm-many') || '').replace('%n%', n);
+      }
+      if (question && !window.confirm(question)) {
+        event.preventDefault();
+        return;
+      }
+    }
     if (form.getAttribute('data-dk-sent')) {
       event.preventDefault();
       return;
     }
     form.setAttribute('data-dk-sent', '1');
-    form.querySelectorAll('button[type="submit"], button.formsubmit').forEach(function (button) {
+    var clicked = event.submitter ? [event.submitter] : form.querySelectorAll('button[type="submit"], button.formsubmit');
+    clicked.forEach(function (button) {
       button.classList.add('loading', 'dk-busy');
       button.setAttribute('aria-busy', 'true');
     });

@@ -85,6 +85,13 @@ class Settings extends Model
     /** @var bool Topic: a rule could remove many old records. */
     public bool $notifyBacklog = false;
     public int $backlogItems = 1000;
+    /** @var bool Topic: Craft's queue is in trouble – jobs failed, a job hangs, or nothing is being worked off. */
+    public bool $notifyQueue = false;
+    /**
+     * @var int A job that has been waiting this many minutes while none is running means that the queue is not being
+     * worked off. Used wherever the state of the queue is shown, whether the topic above is on or not.
+     */
+    public int $queueWaitMinutes = 15;
 
     /** @var int A condition that stays is sent again after this many days (0: only once). */
     public int $remindAfterDays = 7;
@@ -206,6 +213,7 @@ class Settings extends Model
             [['changeRecordsKeepDays'], 'integer', 'min' => 30, 'max' => 3650],
             [['staleAfterDays'], 'integer', 'min' => 1, 'max' => 365],
             [['backlogItems'], 'integer', 'min' => 1],
+            [['queueWaitMinutes'], 'integer', 'min' => 1, 'max' => 1440],
             [['remindAfterDays'], 'integer', 'min' => 0, 'max' => 365],
             [['minLevel'], 'in', 'range' => ['warn', 'alert']],
             [['emailRecipients', 'webhookUrl', 'webhookSecret', 'statusToken'], 'string', 'max' => 500],

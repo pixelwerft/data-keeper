@@ -54,12 +54,16 @@ The screenshots show made-up figures from a test install.
 - **Sums** – below the database tables (the ones listed and all of them) and below the file storage.
 - **Every measurement counts** – measure again after a cleanup: the measurements of the last 31 days are listed one
   by one, also several on one day; the course keeps the last one of each day.
+- **Tidy lists** – delete backup files, single measurements and entries of *Last actions* one by one with the trash
+  button, or tick several and delete them together. The browser asks before anything goes.
 - **Remote monitoring** – let a tool outside the site read the figures, the versions of Craft, PHP, the database and
   the plugins and the available updates as JSON, for example a dashboard that watches several sites. Off by default;
   access needs the key of the site.
 - **Old versions at a glance** – the overview says how many saved versions are older than a year and older than two years.
+- **Queue watch** – says when Craft’s queue is in trouble: jobs failed, a job hangs, or jobs wait and nothing is being
+  worked off. On the overview, as a notification topic, at the status endpoint and in the answer to a remote query.
 - **Notifications** – switch on the topics you care about (a figure got too big, no measurement for a while, a cleanup
-  finished or failed, old data is waiting). Each is available as a **notice in the control panel**, as a **message
+  finished or failed, old data is waiting, the queue is in trouble). Each is available as a **notice in the control panel**, as a **message
   pushed out** (e-mail, webhook) and at a **status endpoint** a monitoring tool can poll.
 - **For your privacy policy** – the page lists the retention periods of all rules that are on, ready to copy.
 - Console commands, an optional queue job, a permission. Interface in English, German (`de`, `de-CH`), French and
@@ -133,6 +137,7 @@ return [
     'notifyStale' => true,  'staleAfterDays' => 3,
     'notifyCleanup' => true,
     'notifyBacklog' => true, 'backlogItems' => 1000,
+    'notifyQueue' => true,   'queueWaitMinutes' => 15,          // a job waiting longer while none runs: the queue hangs
     'remindAfterDays' => 7,                                    // 0: tell only once
     'channelCp' => true,
     'channelEmail' => true,   'emailRecipients' => 'owner@example.com, tech@example.com',
@@ -213,6 +218,23 @@ a plain «is the URL healthy» monitor raises the alarm. The endpoint only reads
 answers 404 without a configured token and 401 with a wrong one, both as JSON. A header (`X-Data-Keeper-Key` or
 `Authorization: Bearer`) is safer than `?statusToken=`, because URLs end up in logs.
 
+## The queue
+
+Craft does its slow work in a queue, and so do the cleanup and the actions of this plugin. When the queue stops,
+nothing says so by itself. Data Keeper looks at it whenever it is asked – nothing is stored, nothing is changed – and
+reports three kinds of trouble:
+
+- **Failed jobs** stay in the queue until someone runs them again or releases them (level «keep an eye on it»).
+- **A job hangs**: it is marked as running but has not reported for longer than it is given to run («act now»).
+- **Nothing is being worked off**: a job has been waiting for more than `queueWaitMinutes` (15 by default) and none
+  is running – usually `runQueueAutomatically` is off and the cron job or daemon that should run the queue does not
+  («act now»).
+
+Where it shows: under *Needs attention* on the overview and as a line on the *Information* tab (always), in the answer
+to a remote query (`queue`, always), and – once the topic «The queue is in trouble» (`notifyQueue`) is switched on – in
+the control panel notice, the pushed messages and at the status endpoint. A pushed message needs something that still
+runs, so let a cron job measure (`craft data-keeper/measure`) rather than rely on the queue for it.
+
 ## Statistics
 
 The *Statistics* tab of the overview draws the course of every key figure from the stored measurements – one point
@@ -244,11 +266,12 @@ Craft’s queue manager. A job that failed shows there too.
 | Change records | *Clear* | Removes the change records Craft does not need, whatever their age. Records of entries with drafts stay. |
 | Deleted elements | *Clear* | Empties the trash with Craft’s own garbage collection, as `craft gc --delete-all-trashed` does. The dialog says what the trash is and what it holds (see below). |
 | Backups | *Compress* | Packs every backup that lies in the folder as a plain `.sql` file into a `.sql.zip` next to it and removes the plain file once the zip was checked. The date of the backup stays, and `craft db/restore` takes the zip as it is. Backups that are compressed already are left alone. |
-| Backups | *Files* | Lists the files in the backup folder; each can be deleted after the browser asked «really?». |
+| Backups | *Files* | Lists the files in the backup folder. Delete one with its trash button, or tick several and delete them together; the browser asks «really?» first. |
 | Logs | *Clear* | Removes the log files directly in the log folder, except the ones named in `logsKeep`. Can be switched off with `logsClearable`. |
 | Cache | *Clear* | Clears Craft’s data cache, the compiled templates and the compiled classes, as Craft’s own *Caches* utility does for these three. Nothing is lost; Craft builds them again. The files of the control panel in the web folder (`cpresources`) are left alone on purpose: if publishing them again is interrupted, editors stay empty. |
 
-The last results are listed on the overview under *Last actions*.
+The last results are listed on the overview under *Last actions*. Admins can take entries out of that list – one by
+one or several ticked ones together; only the entry goes, what the action did stays done.
 
 ### The trash
 
@@ -330,12 +353,27 @@ The answer says what the last measurement found and what the site runs on:
       "cms": ["5.12.1"],
       "plugins": { "Data Keeper": ["1.4.1"] }
     }
+  },
+  "queue": {
+    "status": "alert",
+    "problems": ["stuck", "failed"],
+    "waiting": 4,
+    "delayed": 0,
+    "running": 0,
+    "failed": 1,
+    "oldestWaitingMinutes": 95,
+    "hungMinutes": null
   }
 }
 ```
 
 - `lastMeasurement` is `null` before the first measurement. It is read as it was stored – nothing is measured. Sizes
   are in MB.
+- `queue` is Craft’s queue as it is at the moment of the query (not from the measurement): how many jobs wait, are
+  delayed, run and failed, for how many minutes the oldest has been waiting, and `status` (`ok`, `warn`, `alert`) with
+  what is wrong in `problems` – `failed` (jobs failed and stay in the queue), `hung` (a job has not reported for
+  `hungMinutes`, longer than it is given to run) and `stuck` (a job has been waiting longer than `queueWaitMinutes`
+  and none is running: nobody works the queue off). `null` if the site uses another queue than Craft’s own.
 - `updatesAvailable` lists the versions Craft and the plugins could be updated to, newest first; `cms` is an empty
   list and `plugins` an empty object when there is nothing to update. It is `null` if Craft could not find out. The
   list comes from Craft, which keeps what it found for a day and asks its update service again after that – such a

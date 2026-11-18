@@ -253,21 +253,36 @@ class Measurements extends Component
      */
     public function deleteRecent(string $at): bool
     {
-        $deleted = false;
-        $stored = DataKeeper::$plugin->store->update(function(array $data) use ($at, &$deleted) {
-            if (($data['last']['measuredAt'] ?? null) === $at) {
-                return $data;
+        return $this->deleteRecents([$at]) === 1;
+    }
+
+    /**
+     * Deletes several of the single measurements at once, each with its place in the course. The latest measurement
+     * and times that are not in the list are skipped.
+     *
+     * @param string[] $ats the times of the measurements (ISO 8601), as {@see recent()} gives them
+     * @return int how many were deleted
+     */
+    public function deleteRecents(array $ats): int
+    {
+        $deleted = 0;
+        $stored = DataKeeper::$plugin->store->update(function(array $data) use ($ats, &$deleted) {
+            $deleted = 0;
+            foreach (array_unique($ats) as $at) {
+                if (($data['last']['measuredAt'] ?? null) === $at) {
+                    continue;
+                }
+                $result = Growth::removeRecent($data['recent'] ?? [], $data['history'] ?? [], $at);
+                if ($result === null) {
+                    continue;
+                }
+                $deleted++;
+                $data['recent'] = $result['recent'];
+                $data['history'] = $result['history'];
             }
-            $result = Growth::removeRecent($data['recent'] ?? [], $data['history'] ?? [], $at);
-            if ($result === null) {
-                return $data;
-            }
-            $deleted = true;
-            $data['recent'] = $result['recent'];
-            $data['history'] = $result['history'];
             return $data;
         });
-        return $stored && $deleted;
+        return $stored ? $deleted : 0;
     }
 
     /** @return array{since: ?string, values: array<string, ?float>} */

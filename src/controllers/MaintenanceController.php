@@ -6,6 +6,7 @@ use Craft;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use pixelwerft\datakeeper\DataKeeper;
+use pixelwerft\datakeeper\helpers\Picked;
 use pixelwerft\datakeeper\maintenance\Action;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -83,17 +84,20 @@ class MaintenanceController extends Controller
         ]);
     }
 
-    /** Deletes one backup file (the browser asked «really?» before), then shows the list again. */
-    public function actionDeleteBackup(): Response
+    /**
+     * Deletes backup files (the browser asked «really?» before) – the one whose button was clicked, or all that were
+     * ticked – and shows the list again.
+     */
+    public function actionDeleteBackups(): Response
     {
         $this->requirePostRequest();
-        $name = (string)$this->request->getRequiredBodyParam('file');
-        if (DataKeeper::$plugin->maintenance->deleteBackup($name)) {
-            $this->setSuccessFlash(DataKeeper::t('«{file}» was deleted.', ['file' => $name]));
+        $deleted = DataKeeper::$plugin->maintenance->deleteBackups(Picked::from($this->request, 'file'));
+        if ($deleted > 0) {
+            $this->setSuccessFlash(DataKeeper::t('{n, plural, one{# backup file was} other{# backup files were}} deleted.', ['n' => $deleted]));
         } else {
-            $this->setFailFlash(DataKeeper::t('«{file}» could not be deleted.', ['file' => $name]));
+            $this->setFailFlash(DataKeeper::t('Nothing was deleted.'));
         }
-        // back to the overview with the list open again, so the next file can go at once
+        // back to the overview with the list open again, so the next files can go at once
         return $this->redirect(UrlHelper::cpUrl('data-keeper', ['open' => 'backups']));
     }
 

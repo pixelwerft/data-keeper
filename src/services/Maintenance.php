@@ -263,13 +263,15 @@ class Maintenance extends Component
     /**
      * What the last actions did, newest first, ready to show (in the language of whoever reads it).
      *
-     * @return array<int, array{at: string, label: string, text: string, ok: bool, problems: string[], source: string}>
+     * @return array<int, array{key: string, at: string, label: string, text: string, ok: bool, problems: string[], source: string}>
+     *         `key` names the entry for {@see forget()}
      */
     public function results(int $limit = 5): array
     {
         $out = [];
         foreach (array_slice(array_reverse(DataKeeper::$plugin->store->get('actions', [])), 0, $limit) as $report) {
             $out[] = [
+                'key' => self::keyOf($report),
                 'at' => $report['at'],
                 'label' => $this->labelOf($report['id']),
                 'text' => $this->describe($report),
@@ -279,6 +281,31 @@ class Maintenance extends Component
             ];
         }
         return $out;
+    }
+
+    /**
+     * Takes entries out of the list of the last actions. Only the entries go: what an action did stays done.
+     *
+     * @param string[] $keys as {@see results()} gives them
+     * @return int how many entries were removed
+     */
+    public function forget(array $keys): int
+    {
+        $removed = 0;
+        $stored = DataKeeper::$plugin->store->update(function(array $data) use ($keys, &$removed) {
+            $all = $data['actions'] ?? [];
+            $kept = array_values(array_filter($all, fn(array $report) => !in_array(self::keyOf($report), $keys, true)));
+            $removed = count($all) - count($kept);
+            $data['actions'] = $kept;
+            return $data;
+        });
+        return $stored ? $removed : 0;
+    }
+
+    /** What names one stored result: when it was and what it was. */
+    private static function keyOf(array $report): string
+    {
+        return ($report['at'] ?? '') . '|' . ($report['id'] ?? '');
     }
 
     /**
@@ -344,17 +371,27 @@ class Maintenance extends Component
     }
 
     /**
-     * Deletes one file from the backup folder. Only a file {@see backupFiles()} lists can go: the name is compared
+     * Deletes files from the backup folder. Only files {@see backupFiles()} lists can go: every name is compared
      * with that list, so nothing outside the folder (and no folder, link or hidden file) can be named.
+     *
+     * @param string[] $names
+     * @return int how many files were deleted
      */
-    public function deleteBackup(string $name): bool
+    public function deleteBackups(array $names): int
     {
-        if (!in_array($name, array_column($this->backupFiles(), 'name'), true)) {
-            return false;
+        $listed = array_column($this->backupFiles(), 'name');
+        $folder = Craft::$app->getPath()->getDbBackupPath(false);
+        $deleted = 0;
+        foreach (array_unique($names) as $name) {
+            if (!in_array($name, $listed, true)) {
+                continue;
+            }
+            if (@unlink($folder . DIRECTORY_SEPARATOR . $name)) {
+                $deleted++;
+                Craft::info("Deleted the backup file $name.", __METHOD__);
+            }
         }
-        $deleted = @unlink(Craft::$app->getPath()->getDbBackupPath(false) . DIRECTORY_SEPARATOR . $name);
-        if ($deleted) {
-            Craft::info("Deleted the backup file $name.", __METHOD__);
+        if ($deleted > 0) {
             DataKeeper::$plugin->measurements->refreshFolder('backups');
         }
         return $deleted;

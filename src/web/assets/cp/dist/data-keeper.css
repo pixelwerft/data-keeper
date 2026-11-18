@@ -133,3 +133,8 @@
 .dk-chart-mark line { stroke: var(--dk-muted); stroke-width: 1; stroke-dasharray: 2 3; }
 .dk-chart-mark path { fill: var(--dk-muted); }
 .dk-chart-facts { margin: 0; font-size: 13px; }
+
+/* lists whose rows can be ticked and deleted together */
+.dk-pick { width: 1%; padding-right: 0 !important; }
+.dk-pick input { display: block; margin: 0; }
+.dk-batch { display: flex; align-items: center; gap: 10px; margin: 8px 0 0; }

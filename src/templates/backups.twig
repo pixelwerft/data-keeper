@@ -1,5 +1,5 @@
-{# The files in the backup folder, each with a button that deletes it (after the browser asked «really?»). Opened in a
-   dialog from the «Backups» card; as a page it works the same. #}
+{# The files in the backup folder: each can be deleted by its own button, or several ticked ones together (the browser
+   asks «really?» first). Opened in a dialog from the «Backups» card; as a page it works the same. #}
 {% extends craft.app.request.isAjax ? 'data-keeper/_dialog' : '_layouts/cp' %}
 {% import 'data-keeper/_macros' as m %}
 {% do view.registerAssetBundle('pixelwerft\\datakeeper\\web\\assets\\cp\\DataKeeperAsset') %}
@@ -13,40 +13,50 @@
     <p class="light">{{ 'The files that lie directly in the backup folder, newest first.'|t('data-keeper') }} <code>{{ folder }}</code></p>
 
     {% if files|length %}
-      <table class="data fullwidth dk-files">
-        <thead>
-          <tr>
-            <th>{{ 'File'|t('data-keeper') }}</th>
-            <th>{{ 'Date'|t('data-keeper') }}</th>
-            <th class="dk-num">MB</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for file in files %}
+      {# one row by its own button, or several ticked ones together; the browser asks before anything goes #}
+      <form method="post" accept-charset="UTF-8" data-dk-batch
+        data-dk-confirm-many="{{ 'Really delete the selected backup files ({n})? This cannot be undone.'|t('data-keeper', { n: '%n%' }) }}">
+        {{ csrfInput() }}
+        {{ actionInput('data-keeper/maintenance/delete-backups') }}
+        <table class="data fullwidth dk-files">
+          <thead>
             <tr>
-              <td><code>{{ file.name }}</code></td>
-              <td>{{ file.mtime|datetime('short') }}</td>
-              <td class="dk-num">{{ m.num(file.mb) }}</td>
-              <td class="dk-num">
-                <form method="post" accept-charset="UTF-8" onsubmit="return confirm('{{ 'Really delete «{file}»? This cannot be undone.'|t('data-keeper', { file: file.name })|e('js') }}');">
-                  {{ csrfInput() }}
-                  {{ actionInput('data-keeper/maintenance/delete-backup') }}
-                  <input type="hidden" name="file" value="{{ file.name }}">
-                  <button type="submit" class="btn small" data-icon="trash" title="{{ 'Delete'|t('data-keeper') }}" aria-label="{{ 'Delete «{file}»'|t('data-keeper', { file: file.name }) }}"></button>
-                </form>
-              </td>
+              <th class="dk-pick"><input type="checkbox" data-dk-all aria-label="{{ 'Select all'|t('data-keeper') }}"></th>
+              <th>{{ 'File'|t('data-keeper') }}</th>
+              <th>{{ 'Date'|t('data-keeper') }}</th>
+              <th class="dk-num">MB</th>
+              <th></th>
             </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot>
-          <tr>
-            <th scope="row" colspan="2">{{ 'Sum'|t('data-keeper') }}</th>
-            <td class="dk-num">{{ m.num(files|reduce((sum, f) => sum + f.mb, 0)|round(1)) }}</td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
+          </thead>
+          <tbody>
+            {% for file in files %}
+              <tr>
+                <td class="dk-pick"><input type="checkbox" name="file[]" value="{{ file.name }}" aria-label="{{ 'Select {what}'|t('data-keeper', { what: file.name }) }}"></td>
+                <td><code>{{ file.name }}</code></td>
+                <td>{{ file.mtime|datetime('short') }}</td>
+                <td class="dk-num">{{ m.num(file.mb) }}</td>
+                <td class="dk-num">
+                  <button type="submit" name="one" value="{{ file.name }}" class="btn small" data-icon="trash" title="{{ 'Delete'|t('data-keeper') }}"
+                    aria-label="{{ 'Delete «{file}»'|t('data-keeper', { file: file.name }) }}"
+                    data-dk-confirm="{{ 'Really delete «{file}»? This cannot be undone.'|t('data-keeper', { file: file.name }) }}"></button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td></td>
+              <th scope="row" colspan="2">{{ 'Sum'|t('data-keeper') }}</th>
+              <td class="dk-num">{{ m.num(files|reduce((sum, f) => sum + f.mb, 0)|round(1)) }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="dk-batch">
+          <button type="submit" class="btn small" data-dk-many disabled>{{ 'Delete selected'|t('data-keeper') }}</button>
+          <span class="light" data-dk-count data-dk-count-text="{{ '{n} selected'|t('data-keeper', { n: '%n%' }) }}"></span>
+        </div>
+      </form>
     {% else %}
       <p class="dk-note">{{ 'There are no files in the backup folder.'|t('data-keeper') }}</p>
     {% endif %}

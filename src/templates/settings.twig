@@ -190,6 +190,19 @@
     disabled: 'staleAfterDays' in overridden, warning: s.warn(overridden, 'staleAfterDays'),
   }) }}
   {{ forms.lightswitchField({
+    label: 'The queue is in trouble'|t('data-keeper'),
+    instructions: 'Jobs failed, a job hangs, or jobs wait and nothing is being worked off. Read when it is asked for, so the endpoint and the control panel always show the state of the moment. The overview and remote queries say it also while this is off.'|t('data-keeper'),
+    id: 'notifyQueue', name: 'notifyQueue', on: settings.notifyQueue,
+    disabled: 'notifyQueue' in overridden, warning: s.warn(overridden, 'notifyQueue'),
+  }) }}
+  {{ forms.textField({
+    label: 'A job may wait for (minutes)'|t('data-keeper'),
+    instructions: 'If a job has been waiting longer than this and none is running, the queue counts as not being worked off.'|t('data-keeper'),
+    id: 'queueWaitMinutes', name: 'queueWaitMinutes', type: 'number', size: 6, min: 1,
+    value: settings.queueWaitMinutes, errors: settings.getErrors('queueWaitMinutes'),
+    disabled: 'queueWaitMinutes' in overridden, warning: s.warn(overridden, 'queueWaitMinutes'),
+  }) }}
+  {{ forms.lightswitchField({
     label: 'A cleanup finished or failed'|t('data-keeper'),
     id: 'notifyCleanup', name: 'notifyCleanup', on: settings.notifyCleanup,
     disabled: 'notifyCleanup' in overridden, warning: s.warn(overridden, 'notifyCleanup'),

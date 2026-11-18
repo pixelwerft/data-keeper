@@ -33,7 +33,16 @@ class ClearLogs extends Action
 
     public function description(): string
     {
-        return self::t('Removes all log files that lie directly in the log folder, also the ones of today. Craft starts new ones with the next entry. What the logs said is gone, so keep them if you are still looking into a problem.');
+        return self::t('Removes the log files that lie directly in the log folder, also the ones of today. Craft starts new ones with the next entry. What the logs said is gone, so keep them if you are still looking into a problem.');
+    }
+
+    public function notes(): array
+    {
+        $kept = DataKeeper::$plugin->getSettings()->logsKept();
+        return [$kept
+            ? self::t('Left alone, as the settings say: {files}.', ['files' => implode(', ', $kept)])
+            : self::t('To keep certain logs – the log of a plugin you want as a record, for example – name them in the settings under «Log files to keep». Craft’s own logs (web, console, queue, PHP errors) only help to look into a problem; no statistics depend on them.'),
+        ];
     }
 
     public function available(): bool

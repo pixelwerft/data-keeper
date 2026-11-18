@@ -21,3 +21,57 @@
     {{ 'Data that no longer has a purpose should go: the less a site keeps, the less can leak, and the smaller backups and the privacy policy get. For each kind of data decide how long it is kept, switch the matching cleanup rule on, and write that period into your privacy policy. Nothing here is removed by itself – a rule has to be switched on and a run confirmed.'|t('data-keeper') }}
   </aside>
 {% endmacro %}
+
+{# the course of one key figure: a line chart as SVG (see helpers/Chart) with the facts of the period below it #}
+{% macro chart(c, limit) %}
+  {% import _self as m %}
+  {% set unit = limit.unit ? ' ' ~ limit.unit : '' %}
+  {% if c is null %}
+    <p class="dk-note">{{ 'No measurements in this period.'|t('data-keeper') }}</p>
+  {% else %}
+    <svg class="dk-chart-plot" viewBox="0 0 {{ c.width }} {{ c.height }}" role="img"
+      aria-label="{{ '{figure}: course from {from} to {to}'|t('data-keeper', { figure: limit.label|t('data-keeper'), from: c.first.date|date('short'), to: c.last.date|date('short') }) }}">
+      {% for tick in c.yTicks %}
+        <line class="dk-chart-grid" x1="{{ c.plot.x0 }}" x2="{{ c.plot.x1 }}" y1="{{ tick.y }}" y2="{{ tick.y }}"/>
+        <text class="dk-chart-text" x="{{ c.plot.x0 - 8 }}" y="{{ tick.y + 4 }}" text-anchor="end">{{ tick.value|number(c.decimals) }}</text>
+      {% endfor %}
+      {% for tick in c.xTicks %}
+        <text class="dk-chart-text" x="{{ tick.x }}" y="{{ c.height - 8 }}" text-anchor="{{ tick.anchor }}">{{ tick.date|date('short') }}</text>
+      {% endfor %}
+      {% for line in c.limits %}
+        <line class="dk-chart-limit dk-chart-limit-{{ line.level }}" x1="{{ c.plot.x0 }}" x2="{{ c.plot.x1 }}" y1="{{ line.y }}" y2="{{ line.y }}">
+          <title>{{ m.level(line.level) }}: {{ m.num(line.value) }}{{ unit }}</title>
+        </line>
+      {% endfor %}
+      {% if c.area %}<path class="dk-chart-area" d="{{ c.area }}"/>{% endif %}
+      {% if c.points|length > 1 %}<path class="dk-chart-line" d="{{ c.line }}"/>{% endif %}
+      {% for mark in c.marks %}
+        <g class="dk-chart-mark">
+          <title>{{ mark.date|date('short') }}: {{ mark.texts|join(', ') }}</title>
+          <line x1="{{ mark.x }}" x2="{{ mark.x }}" y1="{{ c.plot.y0 }}" y2="{{ c.plot.y1 }}"/>
+          <path d="M{{ mark.x - 5 }} {{ c.plot.y1 + 8 }} L{{ mark.x + 5 }} {{ c.plot.y1 + 8 }} L{{ mark.x }} {{ c.plot.y1 + 1 }} Z"/>
+        </g>
+      {% endfor %}
+      {% if c.points|length <= 120 %}
+        {% for point in c.points %}
+          <circle class="dk-chart-point" cx="{{ point.x }}" cy="{{ point.y }}" r="{{ c.points|length > 40 ? 2 : 3 }}">
+            <title>{{ point.date|date('short') }}: {{ m.num(point.value) }}{{ unit }}</title>
+          </circle>
+        {% endfor %}
+      {% endif %}
+    </svg>
+    <p class="dk-chart-facts">
+      {% if c.points|length > 1 %}
+        {% set sign = c.change > 0 ? '+' : '' %}
+        <strong>{{ sign }}{{ m.num(c.change) }}{{ unit }}</strong>{% if c.percent is not null %} ({{ sign }}{{ m.num(c.percent) }} %){% endif %}
+        <span class="light">{{ 'from {a} on {aDate} to {b} on {bDate}'|t('data-keeper', { a: m.num(c.first.value) ~ unit, aDate: c.first.date|date('short'), b: m.num(c.last.value) ~ unit, bDate: c.last.date|date('short') }) }}
+          · {{ 'highest {a} on {aDate}, lowest {b} on {bDate}'|t('data-keeper', { a: m.num(c.highest.value) ~ unit, aDate: c.highest.date|date('short'), b: m.num(c.lowest.value) ~ unit, bDate: c.lowest.date|date('short') }) }}</span>
+      {% else %}
+        <strong>{{ m.num(c.last.value) }}{{ unit }}</strong> <span class="light">{{ c.last.date|date('short') }}</span>
+      {% endif %}
+      {% if c.marks|length %}
+        <br><span class="light">{% for mark in c.marks %}{{ mark.date|date('short') }}: {{ mark.texts|join(', ') }}{{ not loop.last ? ' · ' }}{% endfor %}</span>
+      {% endif %}
+    </p>
+  {% endif %}
+{% endmacro %}

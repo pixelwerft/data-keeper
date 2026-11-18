@@ -1,9 +1,5 @@
 # Roadmap
 
-## Next
-- Statistics: a view of how each key figure developed over time (a chart per figure from the stored measurements), so
-  growth and the effect of a cleanup can be seen at a glance
-
 ## Ideas
 - Extra folders to measure (and rotate) configured in the settings
 - Slack / Teams message formats for the webhook
@@ -22,3 +18,5 @@
 - 1.4.0 – cache figure, several measurements a day, remote answer with versions and updates
 - 1.5.0 – remote queries hardened (key from a header only, HTTPS only, key kept out of the logs), deleting single
   measurements
+- 1.6.0 – statistics (a chart per key figure), running status of actions, compressing backups, log files to keep,
+  remote monitoring allowed per environment on the information tab

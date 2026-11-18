@@ -12,6 +12,9 @@ use craft\web\Request;
  * <key>` – never from the address, which ends up in the logs of web servers and proxies. The token of the status
  * endpoint, which says far less, may also come as `?statusToken=` for tools that can only call a URL.
  *
+ * `X-Data-Keeper-Key` is the header to count on: some web servers (Apache with PHP over CGI or FastCGI, as many shared
+ * hosts run it) do not pass `Authorization` on to PHP at all, and then there is nothing left to read here.
+ *
  * Craft writes the request with every warning and error it logs (and with everything while dev mode is on), including
  * `$_SERVER` and so the headers; it masks values by the name of their key, and «authorization» is not on its list. So
  * the key is taken out of `$_SERVER` as early as possible: what is logged later in the request no longer holds it.
@@ -57,6 +60,10 @@ final class RequestKey
         $request = Craft::$app->getRequest();
         $own = $request instanceof Request ? $request->getHeaders()->get(self::HEADER) : null;
         $authorization = $request instanceof Request ? $request->getHeaders()->get('Authorization') : null;
+        if (!is_string($authorization) || $authorization === '') {
+            // where a rewrite rule saved the header from being dropped, it arrives under this name
+            $authorization = $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
+        }
 
         self::$key = '';
         if (is_string($own) && trim($own) !== '') {

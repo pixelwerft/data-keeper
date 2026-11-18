@@ -3,11 +3,9 @@
 namespace pixelwerft\datakeeper\controllers;
 
 use Craft;
-use craft\helpers\Queue;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use pixelwerft\datakeeper\DataKeeper;
-use pixelwerft\datakeeper\jobs\MaintenanceJob;
 use pixelwerft\datakeeper\maintenance\Action;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
@@ -63,12 +61,14 @@ class MaintenanceController extends Controller
             return $this->redirect($page);
         }
 
-        Queue::push(new MaintenanceJob([
-            'id' => $action->id(),
-            'confirmed' => $action->permanent() ? $confirmed : null,
-            'source' => 'cp',
-        ]));
-        $this->setSuccessFlash(DataKeeper::t('«{action}» was queued. It runs in the background; the result appears in the overview.', ['action' => $action->label()]));
+        $maintenance = DataKeeper::$plugin->maintenance;
+        if ($maintenance->isPending($action->id())) {
+            Craft::$app->getSession()->setNotice(DataKeeper::t('«{action}» is already running.', ['action' => $action->label()]));
+            return $this->redirect('data-keeper');
+        }
+
+        $maintenance->queue($action->id(), $action->permanent() ? $confirmed : null);
+        $this->setSuccessFlash(DataKeeper::t('«{action}» was started. It runs in the background; the overview shows where it stands.', ['action' => $action->label()]));
         return $this->redirect('data-keeper');
     }
 

@@ -56,6 +56,12 @@ class Settings extends Model
     public bool $logsEnabled = false;
     /** @var int Log files older than this many days are removed. */
     public int $logsKeepDays = 30;
+    /**
+     * @var string[]|string Log files that are never removed, neither by the rule nor by «Clear» on the card: file
+     * names, `*` for any characters (`notification-digest.log`, `formie-*.log`). A list, or a text with one name per
+     * line. The rotated copies of a kept file (`….log.1`) are kept too.
+     */
+    public array|string $logsKeep = [];
 
     public bool $changeRecordsEnabled = false;
     /** @var int Change records (which field changed when) older than this many days are removed. */
@@ -98,14 +104,17 @@ class Settings extends Model
     /** @var string Token for the status endpoint; empty switches the endpoint off. Environment variables allowed. */
     public string $statusToken = '';
 
-    // Remote queries – off until switched on
+    // Remote monitoring – off until switched on
     // -------------------------------------------------------------------------
 
     /**
-     * @var bool|string Answer remote queries (`/actions/data-keeper/remote`, needs the key of the site). A string is
-     * allowed so that an environment variable can be named; what it means is decided in {@see remoteAllowed()}.
+     * @var bool|string|null Let a monitoring tool outside the site read what the site runs on (versions, waiting
+     * updates) and the key figures with their status: `/actions/data-keeper/remote`, needs the key of the site. Meant
+     * for `config/data-keeper.php`, where it decides for good. Null (not set): the switch on the «Information» tab
+     * decides (see `Remote::enabled()`). A string is allowed so that an environment variable can be named; only a
+     * clear yes counts.
      */
-    public bool|string $allowRemote = false;
+    public bool|string|null $allowRemoteMonitor = null;
 
     /**
      * @var bool Also answer remote queries over plain HTTP. Only for a site behind a proxy that ends HTTPS and does
@@ -129,13 +138,13 @@ class Settings extends Model
     }
 
     /**
-     * Whether remote queries are switched on. Only a clear yes counts: `true`, `'1'`, `'true'`, `'on'`, `'yes'`, or an
-     * environment variable with one of these. Anything else – `'false'`, an empty or unknown value – means no, so a
-     * typing mistake in a config file cannot open the address.
+     * Whether a value means «remote monitoring is allowed». Only a clear yes counts: `true`, `'1'`, `'true'`, `'on'`,
+     * `'yes'`, or an environment variable with one of these. Anything else – `'false'`, an empty or unknown value –
+     * means no, so a typing mistake in a config file cannot open the address.
      */
-    public function remoteAllowed(): bool
+    public static function isYes(mixed $value): bool
     {
-        return App::parseBooleanEnv($this->allowRemote) === true;
+        return App::parseBooleanEnv($value) === true;
     }
 
     /** @return string[] */
@@ -192,6 +201,8 @@ class Settings extends Model
             [['revisionsMaxAgeDays'], 'integer', 'min' => 30, 'max' => 3650],
             [['revisionsMode'], 'in', 'range' => ['count', 'age']],
             [['logsKeepDays'], 'integer', 'min' => 1, 'max' => 3650],
+            [['logsKeep'], 'filter', 'filter' => fn($value) => self::namesFrom($value)],
+            [['logsKeep'], 'validateFileNames'],
             [['changeRecordsKeepDays'], 'integer', 'min' => 30, 'max' => 3650],
             [['staleAfterDays'], 'integer', 'min' => 1, 'max' => 365],
             [['backlogItems'], 'integer', 'min' => 1],
@@ -202,6 +213,48 @@ class Settings extends Model
             [['statusToken'], 'validateToken'],
             [['customRules'], 'validateCustomRules'],
         ];
+    }
+
+    /**
+     * The log files to keep as a clean list of patterns.
+     *
+     * @return string[]
+     */
+    public function logsKept(): array
+    {
+        return self::namesFrom($this->logsKeep);
+    }
+
+    /** Whether a log file is one to keep: it matches a pattern, or is a rotated copy (`name.1`) of a file that does. */
+    public function keepsLog(string $fileName): bool
+    {
+        foreach ($this->logsKept() as $pattern) {
+            if (fnmatch($pattern, $fileName, FNM_CASEFOLD) || fnmatch($pattern . '.*', $fileName, FNM_CASEFOLD)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A list of file names from what was entered: a list, or a text with one name per line (commas work too).
+     *
+     * @return string[]
+     */
+    private static function namesFrom(mixed $value): array
+    {
+        $names = is_array($value) ? $value : (preg_split('/[\r\n,]+/', (string)$value) ?: []);
+        $names = array_map(fn($name) => is_string($name) ? trim($name) : '', $names);
+        return array_values(array_unique(array_filter($names, fn(string $name) => $name !== '')));
+    }
+
+    public function validateFileNames(string $attribute): void
+    {
+        foreach (self::namesFrom($this->$attribute) as $name) {
+            if (strlen($name) > 100 || !preg_match('/^[A-Za-z0-9._*?-]+$/', $name) || !preg_match('/[A-Za-z0-9]/', $name)) {
+                $this->addError($attribute, Craft::t('data-keeper', '«{name}» is not a file name. Use letters, digits, dots, hyphens and underscores, and * for any characters; no folders.', ['name' => $name]));
+            }
+        }
     }
 
     public function validateWebhook(string $attribute): void

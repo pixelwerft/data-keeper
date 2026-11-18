@@ -9,6 +9,7 @@
 {# two tabs; Craft shows the container a tab points to and hides the others #}
 {% set tabs = {
   overview: { label: 'Overview'|t('data-keeper'), url: '#dk-overview' },
+  stats: { label: 'Statistics'|t('data-keeper'), url: '#dk-stats' },
   infos: { label: 'Information'|t('data-keeper'), url: '#dk-infos' },
 } %}
 
@@ -41,6 +42,50 @@
       {% endif %}
     </div>
 
+    {# what was started from a card and runs in the queue: said here, so the old numbers below are not taken for the
+       result. The script asks every few seconds and loads the page again when something changed. #}
+    {% set pendingIds = pending|filter(p => p.state != 'failed')|map(p => p.id) %}
+    {% if pending|length or justFinished %}
+      <section class="dk-pending" role="status" aria-live="polite"
+        {%- if pending|length %} data-dk-state-url="{{ actionUrl('data-keeper/default/state') }}" data-dk-state-token="{{ stateToken }}"{% endif %}>
+        <ul class="dk-plain">
+          {% for p in pending %}
+            <li class="dk-pending-{{ p.state }}">
+              {% if p.state == 'failed' %}
+                <span class="dk-pending-mark" aria-hidden="true">!</span>
+                <span><strong>{{ p.label }}</strong> {{ 'failed in the queue. The queue manager says why and can run it again.'|t('data-keeper') }}
+                  <a href="{{ cpUrl('utilities/queue-manager') }}">{{ 'Open the queue manager'|t('data-keeper') }}</a></span>
+              {% else %}
+                <span class="dk-spin" aria-hidden="true"></span>
+                <span><strong>{{ p.label }}</strong>
+                  {% if p.state == 'running' %}
+                    {{ 'is running in the background (started at {time}).'|t('data-keeper', { time: p.at|time('short') }) }}
+                  {% else %}
+                    {{ 'is waiting in the queue (started at {time}).'|t('data-keeper', { time: p.at|time('short') }) }}
+                  {% endif %}
+                  <span class="dk-pending-progress" data-dk-progress="{{ p.id }}">{% if p.progress %}{{ p.progress }} %{% endif %}</span>
+                  {% if p.slow %}
+                    <br><span class="light">{{ 'It has been waiting for a while. If nothing happens, nobody runs the queue of this site: the queue manager shows the waiting jobs.'|t('data-keeper') }}
+                      <a href="{{ cpUrl('utilities/queue-manager') }}">{{ 'Open the queue manager'|t('data-keeper') }}</a></span>
+                  {% endif %}
+                </span>
+              {% endif %}
+            </li>
+          {% endfor %}
+          {% if justFinished %}
+            <li class="dk-pending-{{ justFinished.ok ? 'done' : 'problem' }}">
+              <span class="dk-pending-mark" aria-hidden="true">{{ justFinished.ok ? '✓' : '!' }}</span>
+              <span><strong>{{ justFinished.label }}</strong> · {{ justFinished.at|time('short') }} · {{ justFinished.text }}
+                {%- if justFinished.problems|length %} <span class="light">{{ justFinished.problems|join(' · ') }}</span>{% endif %}</span>
+            </li>
+          {% endif %}
+        </ul>
+        {% if pendingIds|length %}
+          <p class="light">{{ 'The numbers below are from before. This page loads itself again when it is done.'|t('data-keeper') }}</p>
+        {% endif %}
+      </section>
+    {% endif %}
+
     {% if conditions|length %}
       <section class="dk-attention" aria-labelledby="dk-attention-title">
         <h2 id="dk-attention-title">{{ 'Needs attention'|t('data-keeper') }}</h2>
@@ -50,16 +95,6 @@
           {% endfor %}
         </ul>
       </section>
-    {% endif %}
-
-    {% if currentUser.admin %}
-      <form method="post" accept-charset="UTF-8" class="dk-test">
-        {{ csrfInput() }}
-        {{ actionInput('data-keeper/default/test-notification') }}
-        {{ redirectInput('data-keeper') }}
-        <button type="submit" class="btn small">{{ 'Send test message'|t('data-keeper') }}</button>
-        <span class="light">{{ 'Sends a message through the e-mail and webhook channels that are switched on in the settings.'|t('data-keeper') }}</span>
-      </form>
     {% endif %}
 
     {% if not measured %}
@@ -75,7 +110,9 @@
           <span class="dk-card-head">
             {# decorative: the label next to it says what the figure is #}
             <span class="dk-icon" aria-hidden="true">{{ svg('@pixelwerft/datakeeper/icons/' ~ limit.icon ~ '.svg') }}</span>
-            <span class="dk-label">{{ limit.label|t('data-keeper') }}</span>
+            <span class="dk-label">{{ limit.label|t('data-keeper') }}
+              {#- what lies in the database says so; without the mark it is files on disk -#}
+              {%- if limit.in == 'db' %} <abbr class="dk-where" title="{{ 'Lies in the database'|t('data-keeper') }}">{{ 'DB'|t('data-keeper') }}</abbr>{% endif %}</span>
           </span>
           <strong class="dk-value">{{ m.num(value) }}{% if limit.unit %} <small>{{ limit.unit }}</small>{% endif %}</strong>
           {% if value is not null %}<span class="dk-level">{{ m.level(level) }}</span>{% endif %}
@@ -88,14 +125,21 @@
             {% endif %}
           </span>
           <span class="dk-limit light">{{ 'Keep an eye on it from {warn}, act from {alert}{unit}'|t('data-keeper', { warn: m.num(limit.warn), alert: m.num(limit.alert), unit: unit }) }}</span>
-          {% if cardActions[key] is defined %}
-            {# each leads to a page that says what the action would do; nothing happens by clicking here #}
+          {% set actionsOfCard = cardActions[key] ?? [] %}
+          {% set hasFileList = key == 'backups' and canCleanup %}
+          {% if actionsOfCard|length or hasFileList %}
+            {# each leads to a dialog that says what the action would do; nothing happens by clicking here #}
             <span class="dk-card-actions">
-              {% for cardAction in cardActions[key] %}<a class="btn small" href="{{ cpUrl('data-keeper/action/' ~ cardAction.id) }}" data-dk-dialog data-dk-close="{{ 'Close'|t('data-keeper') }}">{{ cardAction.button }}</a>{% endfor %}
-            </span>
-          {% elseif key == 'backups' and canCleanup %}
-            <span class="dk-card-actions">
-              <a class="btn small" href="{{ cpUrl('data-keeper/backups') }}" data-dk-dialog data-dk-name="backups" data-dk-close="{{ 'Close'|t('data-keeper') }}">{{ 'Files…'|t('data-keeper') }}</a>
+              {% for cardAction in actionsOfCard %}
+                {% if cardAction.id in pendingIds %}
+                  <span class="btn small disabled" aria-disabled="true">{{ 'Running…'|t('data-keeper') }}</span>
+                {% else %}
+                  <a class="btn small" href="{{ cpUrl('data-keeper/action/' ~ cardAction.id) }}" data-dk-dialog data-dk-close="{{ 'Close'|t('data-keeper') }}">{{ cardAction.button }}</a>
+                {% endif %}
+              {% endfor %}
+              {% if hasFileList %}
+                <a class="btn small" href="{{ cpUrl('data-keeper/backups') }}" data-dk-dialog data-dk-name="backups" data-dk-close="{{ 'Close'|t('data-keeper') }}">{{ 'Files…'|t('data-keeper') }}</a>
+              {% endif %}
             </span>
           {% endif %}
         </li>
@@ -268,6 +312,45 @@
     {% endif %}
   </div>
 
+  {# how each key figure developed: a chart per figure from the stored measurements, one point per day #}
+  <div id="dk-stats" class="hidden">
+    <p class="dk-lead">{{ 'How each key figure developed, from the stored measurements: one point per day (the last measurement of that day). What a cleanup or an action removed shows as a drop; the dashed lines are the limits, the marks below the line the days something was cleaned up.'|t('data-keeper') }}</p>
+
+    <div class="dk-actions">
+      <span class="light">{{ 'Period'|t('data-keeper') }}</span>
+      <span class="btngroup">
+        {% for name in periods %}
+          <a class="btn small{{ name == period ? ' active' }}" href="{{ cpUrl('data-keeper', name == 'all' ? {} : { period: name }) }}#dk-stats"{% if name == period %} aria-current="true"{% endif %}>
+            {%- switch name -%}
+              {%- case '30' -%}{{ '30 days'|t('data-keeper') }}
+              {%- case '90' -%}{{ '90 days'|t('data-keeper') }}
+              {%- case '365' -%}{{ '1 year'|t('data-keeper') }}
+              {%- default -%}{{ 'Everything'|t('data-keeper') }}
+            {%- endswitch -%}
+          </a>
+        {% endfor %}
+      </span>
+      <span class="light">{{ '{n, plural, one{# day with a measurement} other{# days with a measurement}}'|t('data-keeper', { n: days }) }}</span>
+    </div>
+
+    {% if days < 2 %}
+      <p class="dk-note">{{ 'A course needs measurements on at least two days. Measure regularly – a daily cron job does it – and the charts fill up by themselves.'|t('data-keeper') }}</p>
+    {% endif %}
+
+    <ul class="dk-charts">
+      {% for key, limit in limits %}
+        <li class="dk-chart">
+          <span class="dk-card-head">
+            <span class="dk-icon" aria-hidden="true">{{ svg('@pixelwerft/datakeeper/icons/' ~ limit.icon ~ '.svg') }}</span>
+            <span class="dk-label">{{ limit.label|t('data-keeper') }}
+              {%- if limit.in == 'db' %} <abbr class="dk-where" title="{{ 'Lies in the database'|t('data-keeper') }}">{{ 'DB'|t('data-keeper') }}</abbr>{% endif %}</span>
+          </span>
+          {{ m.chart(charts[key], limit) }}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+
   {# about the installation the figures come from; read when the page is opened, not part of a measurement #}
   <div id="dk-infos" class="hidden">
     <h2>{{ 'Installation'|t('data-keeper') }}</h2>
@@ -286,21 +369,45 @@
       </tbody>
     </table>
 
+    {# admins only: try the channels for pushed messages #}
+    {% if currentUser.admin %}
+      <section class="dk-remote">
+        <h2>{{ 'Notifications'|t('data-keeper') }}</h2>
+        <form method="post" accept-charset="UTF-8" class="dk-test">
+          {{ csrfInput() }}
+          {{ actionInput('data-keeper/default/test-notification') }}
+          {{ redirectInput('data-keeper#dk-infos') }}
+          <button type="submit" class="btn small">{{ 'Send test message'|t('data-keeper') }}</button>
+          <span class="light">{{ 'Sends a message through the e-mail and webhook channels that are switched on in the settings.'|t('data-keeper') }}</span>
+        </form>
+      </section>
+    {% endif %}
+
     {# admins only: the key of the site and where a tool outside asks for the figures #}
     {% if remote %}
       {% import '_includes/forms' as forms %}
       <section class="dk-remote">
-        <h2>{{ 'Remote queries'|t('data-keeper') }}</h2>
-        <p class="light">{{ 'A tool outside the site can ask for the figures of the overview as JSON – a dashboard that watches several sites, for example. Access needs the key below.'|t('data-keeper') }}</p>
-        <p>
+        <h2>{{ 'Remote monitoring'|t('data-keeper') }}</h2>
+        <p class="light">{{ 'A monitoring tool outside the site can read, as JSON, what the site runs on – the versions of Craft, PHP, the database and the plugins, and the updates that are waiting – and the key figures of the last measurement with their status. Access needs the key below.'|t('data-keeper') }}</p>
+        {# the switch: kept in storage next to the key, so it also works where settings cannot be saved #}
+        <form method="post" accept-charset="UTF-8" class="dk-remote-switch">
+          {{ csrfInput() }}
+          {{ actionInput('data-keeper/default/set-remote-allowed') }}
+          {{ hiddenInput('allowed', remote.enabled ? '0' : '1') }}
           {% if remote.enabled %}
             <span class="dk-state dk-state-on">{{ 'Allowed'|t('data-keeper') }}</span>
           {% else %}
             <span class="dk-state">{{ 'Not allowed'|t('data-keeper') }}</span>
-            {{ 'Switch on «Allow remote queries» in the settings; until then the key opens nothing.'|t('data-keeper') }}
-            <a href="{{ cpUrl('settings/plugins/data-keeper') }}">{{ 'Open the settings'|t('data-keeper') }}</a>
           {% endif %}
-        </p>
+          {% if remote.fixed %}
+            <span class="light">{{ 'Set in config/data-keeper.php («{setting}»); change it there.'|t('data-keeper', { setting: remote.fixed }) }}</span>
+          {% elseif remote.enabled %}
+            <button type="submit" class="btn small">{{ 'Switch off'|t('data-keeper') }}</button>
+          {% else %}
+            <button type="submit" class="btn small submit">{{ 'Allow remote monitoring'|t('data-keeper') }}</button>
+            <span class="light">{{ 'Until then the key opens nothing.'|t('data-keeper') }}</span>
+          {% endif %}
+        </form>
         {% if remote.insecure %}
           <p class="error">{{ 'The address does not start with https://. Remote queries are refused over plain HTTP, because the key and the answer would travel unprotected.'|t('data-keeper') }}</p>
         {% endif %}

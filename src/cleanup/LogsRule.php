@@ -21,7 +21,9 @@ class LogsRule extends FileRule
 
     public function description(): string
     {
-        return self::t('Removes log files that have not been written to for {n} days.', ['n' => $this->keepDays()]);
+        $text = self::t('Removes log files that have not been written to for {n} days.', ['n' => $this->keepDays()]);
+        $kept = $this->settings->logsKept();
+        return $kept ? $text . ' ' . self::t('Left alone, as the settings say: {files}.', ['files' => implode(', ', $kept)]) : $text;
     }
 
     public function retention(): string
@@ -52,6 +54,12 @@ class LogsRule extends FileRule
     protected function patterns(): array
     {
         return ['*.log', '*.log.*'];
+    }
+
+    /** The files the settings want kept never become candidates – whatever a subclass selects. */
+    protected function candidates(): array
+    {
+        return array_values(array_filter(parent::candidates(), fn($f) => !$this->settings->keepsLog(basename($f['path']))));
     }
 
     protected function select(array $files): array

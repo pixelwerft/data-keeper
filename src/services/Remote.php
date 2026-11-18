@@ -12,15 +12,17 @@ use craft\models\UpdateRelease;
 use pixelwerft\datakeeper\DataKeeper;
 use pixelwerft\datakeeper\helpers\Growth;
 use pixelwerft\datakeeper\helpers\Levels;
+use pixelwerft\datakeeper\models\Settings;
 
 /**
  * Remote queries: the last measurement and what the site runs on (Craft, PHP, the database, the plugins, the updates
  * that are waiting) as JSON for a tool outside the site – a dashboard that watches several sites, for example.
  *
- * Off until «Allow remote queries» is switched on in the settings. Access needs the key of the site: a random string
- * that is generated once and stays the same until someone replaces it. It is kept in a small file of its own in
- * `storage/` that only the web server's user may read – not in the project config (which usually lives in Git) and
- * not in the file with the measurements.
+ * Off until an admin switches «Allow remote monitoring» on, on the «Information» tab of the overview. Access needs the
+ * key of the site: a random string that is generated once and stays the same until someone replaces it. Key and
+ * switch are kept in a small file of their own in `storage/` that only the web server's user may read – not in the
+ * project config (which usually lives in Git and is the same for every environment) and not in the file with the
+ * measurements.
  */
 class Remote extends Component
 {
@@ -30,13 +32,73 @@ class Remote extends Component
     private const KEY_LENGTH = 48;
     private const KEY_FILE = 'remote-key.json';
 
-    /** @var array{key?: string, createdAt?: string}|null what the key file holds, once it was read */
+    /** Where the answer to «are remote queries allowed?» comes from. */
+    public const SOURCE_CONFIG = 'config';
+    public const SOURCE_SWITCH = 'switch';
+
+    /** The name of the setting in `config/data-keeper.php`. */
+    private const CONFIG_KEY = 'allowRemoteMonitor';
+
+    /** @var array{key?: string, createdAt?: string, allowed?: bool}|null what the key file holds, once it was read */
     private ?array $stored = null;
 
-    /** Whether remote queries are allowed. Only an explicit «on» counts: anything unclear means no. */
+    /**
+     * Whether remote monitoring is allowed. Only an explicit «on» counts: anything unclear means no.
+     *
+     * Decided by
+     * 1. `allowRemoteMonitor` in `config/data-keeper.php`, if it is there – for whoever wants it fixed per
+     *    environment;
+     * 2. otherwise the switch on the «Information» tab. It is kept in `storage/` next to the key, so it can be changed
+     *    on a live server too (where settings cannot be saved) and only counts for that server. Off until an admin
+     *    uses it.
+     */
     public function enabled(): bool
     {
-        return DataKeeper::$plugin->getSettings()->remoteAllowed();
+        return match ($this->source()) {
+            self::SOURCE_CONFIG => Settings::isYes($this->fileConfig()[self::CONFIG_KEY]),
+            default => ($this->stored()['allowed'] ?? null) === true,
+        };
+    }
+
+    /** What decides whether remote monitoring is allowed: one of the `SOURCE_` constants. */
+    public function source(): string
+    {
+        return $this->configKey() !== null ? self::SOURCE_CONFIG : self::SOURCE_SWITCH;
+    }
+
+    /**
+     * The name under which `config/data-keeper.php` says whether remote monitoring is allowed (null: it does not say).
+     * A value of null counts as not said, so the file can leave the decision to the switch on purpose.
+     */
+    public function configKey(): ?string
+    {
+        return isset($this->fileConfig()[self::CONFIG_KEY]) ? self::CONFIG_KEY : null;
+    }
+
+    /**
+     * Switches remote queries on or off (the switch on the «Information» tab). Has no effect while the config file
+     * decides.
+     *
+     * @return bool whether the new state is stored
+     */
+    public function setAllowed(bool $allowed): bool
+    {
+        return $this->locked(function() use ($allowed) {
+            $this->stored = null;
+            $remote = $this->stored();
+            if (empty($remote['key'])) {
+                // the switch lives in the key file: without a key there is none yet
+                $remote = $this->newKey();
+            }
+            $remote['allowed'] = $allowed;
+            return $this->write($remote);
+        }) ?? false;
+    }
+
+    /** @return array<string, mixed> what `config/data-keeper.php` says */
+    private function fileConfig(): array
+    {
+        return Craft::$app->getConfig()->getConfigFromFile(DataKeeper::$plugin->id);
     }
 
     /**
@@ -74,7 +136,12 @@ class Remote extends Component
      */
     public function resetKey(): bool
     {
-        return $this->locked(fn() => $this->write($this->newKey())) ?? false;
+        return $this->locked(function() {
+            $this->stored = null;
+            $allowed = $this->stored()['allowed'] ?? null;
+            // a new key, the switch as it was
+            return $this->write($this->newKey() + (is_bool($allowed) ? ['allowed' => $allowed] : []));
+        }) ?? false;
     }
 
     /** When the current key was generated (null: there is none yet). */
@@ -93,7 +160,35 @@ class Remote extends Component
     /** The address a tool asks. */
     public function url(): string
     {
-        return UrlHelper::siteUrl(Craft::$app->getConfig()->getGeneral()->actionTrigger . '/data-keeper/remote');
+        return $this->addressOf('remote');
+    }
+
+    /**
+     * The address of one of the plugin's two addresses for tools (`remote`, `status`).
+     *
+     * Normally that is the site's own address. Where the front end is served by something else (a headless setup:
+     * the site is `example.com`, Craft answers at `cms.example.com`), the site's address does not reach Craft at
+     * all – so, when shown in the control panel, the address is built on the host one is signed in to.
+     */
+    public function addressOf(string $action): string
+    {
+        $general = Craft::$app->getConfig()->getGeneral();
+        $path = $general->actionTrigger . '/data-keeper/' . $action;
+        $url = UrlHelper::siteUrl($path);
+
+        $request = Craft::$app->getRequest();
+        if ($request->getIsConsoleRequest() || !$request->getIsCpRequest()) {
+            return $url;
+        }
+        $host = rtrim((string)$request->getHostInfo(), '/');
+        if ($host === '' || parse_url($url, PHP_URL_HOST) === parse_url($host, PHP_URL_HOST)) {
+            return $url;
+        }
+        return $host . '/' . match (true) {
+            $general->omitScriptNameInUrls => $path,
+            $general->usePathInfo => 'index.php/' . $path,
+            default => 'index.php?' . $general->pathParam . '=' . $path,
+        };
     }
 
     /**
@@ -163,7 +258,9 @@ class Remote extends Component
         $plugins = [];
         $names = [];
         foreach (Craft::$app->getPlugins()->getAllPlugins() as $handle => $plugin) {
-            $plugins[] = ['name' => $plugin->name, 'handle' => $handle, 'version' => $plugin->getVersion()];
+            // a release tagged «v1.2.3» is installed as «v1.2.3»: without the «v», so versions can be compared
+            $version = preg_replace('/^v(?=\d)/i', '', (string)$plugin->getVersion());
+            $plugins[] = ['name' => $plugin->name, 'handle' => $handle, 'version' => $version];
             $names[$handle] = $plugin->name;
         }
 
@@ -281,7 +378,7 @@ class Remote extends Component
      * What the key file holds. Versions before 1.5 kept the key in the file with the measurements: it is moved over
      * the first time, so that file no longer holds a secret.
      *
-     * @return array{key?: string, createdAt?: string}
+     * @return array{key?: string, createdAt?: string, allowed?: bool}
      */
     private function stored(): array
     {
@@ -310,7 +407,7 @@ class Remote extends Component
      * Stores the key: in a file only its owner may read and write, put in place in one step, and read back to be sure
      * it is there.
      *
-     * @param array{key: string, createdAt: string} $remote
+     * @param array{key: string, createdAt: string, allowed?: bool} $remote
      */
     private function write(array $remote): bool
     {

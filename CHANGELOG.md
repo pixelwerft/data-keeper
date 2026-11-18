@@ -4,6 +4,52 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.6.0 - 2026-11-18
+
+### Added
+- «Statistics»: a tab on the overview with a chart per key figure – its course over 30 days, 90 days, a year or
+  everything that is stored, with the limits as lines, a mark on every day a cleanup or an action removed something,
+  and the change over the period in numbers and percent.
+- «Compress» on the «Backups» card: packs the backups that lie in the folder as plain `.sql` files into `.sql.zip`
+  files and removes the plain file once the zip was checked. The date of the backup stays, and `craft db/restore`
+  takes the zip as it is.
+- «Log files to keep» (`logsKeep`): log files named here – `*` stands for any characters – are never removed,
+  neither by the retention rule for log files nor by «Clear» on the card.
+- While an action from a card waits or runs in the queue, the overview says so, shows the progress and loads itself
+  again when it is done, with the result on top. A job that keeps waiting or failed points to Craft’s queue manager.
+- The dialog of «Empty the trash» says what the trash is, lists what it holds by kind of element and how many
+  elements are older than the period Craft keeps them.
+- The cards whose figure lies in the database carry the mark «DB».
+
+### Changed
+- **After the update remote monitoring is off** until an admin allows it on the «Information» tab or
+  `allowRemoteMonitor` is set in `config/data-keeper.php`: the old name `allowRemote` – in a config file and as a
+  plugin setting – is no longer read.
+- «Settings» in the menu of the section is also there where settings cannot be saved (a live server, usually): the
+  page then shows them read-only (Craft 5.6 and newer).
+- «Send test message» moved from the overview to the «Information» tab.
+- A dialog says that it is loading instead of opening as an empty box.
+- In the dialog «Clear saved versions» the numbers follow the options as they are entered; «Update» is no longer
+  needed there.
+- A button that starts something shows at once that the click was taken and cannot be sent twice.
+- The dialog of «Clear the caches» says that the files of the control panel (`cpresources`) are left alone.
+- «Allow remote queries» is now called «Allow remote monitoring» – it lets a monitoring tool read what the site runs
+  on and whether a key figure is a problem – and moved from the settings to the «Information» tab of the overview. It
+  is kept in `storage/` next to the key, so an admin can switch it on a live server too, where settings cannot be
+  saved, and it only counts for that environment.
+- The setting for config files is called `allowRemoteMonitor`. Where `config/data-keeper.php` sets it, the file
+  decides and the switch on the tab is not offered.
+- Remote queries name the versions of the plugins without a leading «v» (`1.5.0` instead of `v1.5.0`), so they can be
+  compared.
+- The answer to a remote query without a key says that `X-Data-Keeper-Key` is the header to use: some web servers do
+  not pass `Authorization` on to PHP.
+
+### Fixed
+- `Authorization: Bearer` is also read where the web server hands the header on as `REDIRECT_HTTP_AUTHORIZATION`.
+- On a site whose front end is served elsewhere (Craft at `cms.example.com`, the site at `example.com`), the
+  «Information» tab and the settings showed the address of the front end for remote queries and the status endpoint,
+  which does not reach Craft. They now show the address of the control panel one is signed in to.
+
 ## 1.5.0 - 2026-11-13
 
 ### Security

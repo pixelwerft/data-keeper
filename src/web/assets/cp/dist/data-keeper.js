@@ -14,8 +14,18 @@
   /** Loads a page into the open dialog. */
   function load(url) {
     var dialog = current;
+    var round = (dialog.round = (dialog.round || 0) + 1);
     dialog.url = url;
     dialog.content.classList.add('dk-dialog-loading');
+    // what the person is typing in and what they ticked stays as it is when the dialog is filled again
+    var active = document.activeElement;
+    var focus = active && dialog.content.contains(active) && active.name ? active.name : null;
+    var remember = dialog.content.querySelector('input[type="checkbox"][name="remember"]');
+    var remembered = remember ? remember.checked : false;
+    if (!dialog.content.firstChild) {
+      // nothing to show yet: say that something is coming
+      dialog.content.appendChild(waiting());
+    }
     return fetch(url, {
       headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'text/html' },
       credentials: 'same-origin',
@@ -27,17 +37,69 @@
         return response.text();
       })
       .then(function (html) {
-        if (current !== dialog) {
+        if (current !== dialog || dialog.round !== round) {
+          // closed in the meantime, or asked again with other values: this answer is out of date
           return;
         }
         dialog.content.innerHTML = html;
         dialog.content.classList.remove('dk-dialog-loading');
         dialog.modal.updateSizeAndPosition();
+        var again = dialog.content.querySelector('input[type="checkbox"][name="remember"]');
+        if (again && remembered) {
+          again.checked = true;
+        }
+        var field = focus ? dialog.content.querySelector('.dk-options [name="' + focus + '"]') : null;
+        if (field) {
+          field.focus();
+          if (field.type === 'number' || field.type === 'text') {
+            // the cursor back to the end, where it was while typing
+            var value = field.value;
+            field.value = '';
+            field.value = value;
+          }
+        }
       })
       .catch(function () {
+        if (current !== dialog || dialog.round !== round) {
+          return;
+        }
         // whatever went wrong: the page itself still works
         window.location.href = url;
       });
+  }
+
+  /** Fills the dialog again with the values of a form that only asks (method GET). */
+  function ask(form) {
+    var url = new URL(form.getAttribute('action') || current.url, window.location.href);
+    new FormData(form).forEach(function (value, name) {
+      url.searchParams.set(name, value);
+    });
+    // a box that is not ticked is not in the form data: say so, or the page falls back to its default
+    form.querySelectorAll('input[type="checkbox"][name]').forEach(function (box) {
+      if (!box.checked) {
+        url.searchParams.set(box.name, '0');
+      }
+    });
+    return load(url.toString());
+  }
+
+  function asks(form) {
+    return current && form && current.content.contains(form) && (form.getAttribute('method') || 'get').toLowerCase() === 'get';
+  }
+
+  /** What a dialog shows until its page is there: an empty box looks broken. */
+  function waiting() {
+    var box = document.createElement('div');
+    box.className = 'dk-dialog-wait';
+    box.setAttribute('role', 'status');
+    var spin = document.createElement('span');
+    spin.className = 'dk-spin';
+    spin.setAttribute('aria-hidden', 'true');
+    var text = document.createElement('span');
+    text.textContent = (typeof Craft !== 'undefined' && Craft.t ? Craft.t('app', 'Loading') : 'Loading') + ' …';
+    box.appendChild(spin);
+    box.appendChild(text);
+    return box;
   }
 
   function close() {
@@ -58,6 +120,8 @@
     $container.find('.dk-dialog-close').text(closeLabel || 'Close');
 
     var dialog = { content: $container.find('.dk-dialog-content')[0], url: url };
+    // before the dialog is measured, so it opens in its width and says that it is loading
+    dialog.content.appendChild(waiting());
     dialog.modal = new Garnish.Modal($container, {
       onFadeOut: function () {
         dialog.modal.destroy();
@@ -85,21 +149,89 @@
   // something (method POST) is sent as usual and brings the person back to the overview
   document.addEventListener('submit', function (event) {
     var form = event.target;
-    if (!current || !current.content.contains(form) || (form.getAttribute('method') || 'get').toLowerCase() !== 'get') {
+    if (!asks(form)) {
       return;
     }
     event.preventDefault();
-    var url = new URL(form.getAttribute('action') || current.url, window.location.href);
-    new FormData(form).forEach(function (value, name) {
-      url.searchParams.set(name, value);
+    window.clearTimeout(typing);
+    ask(form);
+  });
+
+  // … and does so by itself when a value in it changes, so the numbers below (what would be deleted, the text of the
+  // button) always belong to what is entered above. Until the new numbers are there, nothing can be sent.
+  var typing = null;
+  function changed(event) {
+    var form = event.target && event.target.form;
+    if (!asks(form)) {
+      return;
+    }
+    current.content.querySelectorAll('.dk-run').forEach(function (box) {
+      box.classList.add('dk-busy');
     });
-    // a box that is not ticked is not in the form data: say so, or the page falls back to its default
-    form.querySelectorAll('input[type="checkbox"][name]').forEach(function (box) {
-      if (!box.checked) {
-        url.searchParams.set(box.name, '0');
+    window.clearTimeout(typing);
+    typing = window.setTimeout(function () {
+      if (asks(form) && form.checkValidity()) {
+        ask(form);
       }
+    }, event.type === 'change' ? 0 : 450);
+  }
+  document.addEventListener('input', changed);
+  document.addEventListener('change', changed);
+
+  // a form that changes something (method POST) shows at once that the click was taken, and is not sent twice
+  document.addEventListener('submit', function (event) {
+    var form = event.target;
+    if (event.defaultPrevented || !form.closest || !form.closest('.dk') || (form.getAttribute('method') || 'get').toLowerCase() !== 'post') {
+      return;
+    }
+    if (form.getAttribute('data-dk-sent')) {
+      event.preventDefault();
+      return;
+    }
+    form.setAttribute('data-dk-sent', '1');
+    form.querySelectorAll('button[type="submit"], button.formsubmit').forEach(function (button) {
+      button.classList.add('loading', 'dk-busy');
+      button.setAttribute('aria-busy', 'true');
     });
-    load(url.toString());
+  });
+
+  // while an action runs in the background, the overview asks where it stands: it shows the progress and loads
+  // itself again as soon as something changed (the action started, is through or failed)
+  $(function () {
+    var box = document.querySelector('[data-dk-state-url]');
+    if (!box) {
+      return;
+    }
+    var url = box.getAttribute('data-dk-state-url');
+    var token = box.getAttribute('data-dk-state-token');
+    var timer = window.setInterval(function () {
+      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' }, credentials: 'same-origin' })
+        .then(function (response) {
+          return response.ok ? response.json() : null;
+        })
+        .then(function (state) {
+          if (!state) {
+            return;
+          }
+          (state.pending || []).forEach(function (entry) {
+            var place = box.querySelector('[data-dk-progress="' + entry.id + '"]');
+            if (place && entry.progress) {
+              place.textContent = entry.progress + ' %';
+            }
+          });
+          // not while a dialog is open: whoever is reading it would lose it
+          if (state.token !== token && !current) {
+            window.clearInterval(timer);
+            window.location.replace(window.location.pathname + window.location.search + window.location.hash);
+            if (window.location.hash) {
+              window.location.reload();
+            }
+          }
+        })
+        .catch(function () {
+          // the next round tries again
+        });
+    }, 3000);
   });
 
   // «?open=<name>» opens the dialog of the link with that name at once (after an action inside a dialog brought the

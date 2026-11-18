@@ -26,14 +26,14 @@ class Measurements extends Component
      * name of a file in `src/icons`.
      */
     public const FIGURES = [
-        'database' => ['icon' => 'database', 'label' => 'Database', 'unit' => 'MB', 'warn' => 1000, 'alert' => 2000],
-        'revisions' => ['icon' => 'saved-versions', 'label' => 'Saved versions', 'unit' => '', 'warn' => 25000, 'alert' => 50000],
-        'maxRevisions' => ['icon' => 'versions-per-entry', 'label' => 'Most versions of one entry', 'unit' => '', 'warn' => 50, 'alert' => 100],
-        'changedFields' => ['icon' => 'changelog', 'label' => 'Change records (rows)', 'unit' => '', 'warn' => 500000, 'alert' => 1000000],
-        'deleted' => ['icon' => 'trash', 'label' => 'Deleted elements (in the trash)', 'unit' => '', 'warn' => 2000, 'alert' => 10000],
-        'backups' => ['icon' => 'backups', 'label' => 'Backups', 'unit' => 'MB', 'warn' => 2000, 'alert' => 5000],
-        'logs' => ['icon' => 'logs', 'label' => 'Logs', 'unit' => 'MB', 'warn' => 300, 'alert' => 1000],
-        'cache' => ['icon' => 'cache', 'label' => 'Cache', 'unit' => 'MB', 'warn' => 500, 'alert' => 2000],
+        'database' => ['in' => 'db', 'icon' => 'database', 'label' => 'Database', 'unit' => 'MB', 'warn' => 1000, 'alert' => 2000],
+        'revisions' => ['in' => 'db', 'icon' => 'saved-versions', 'label' => 'Saved versions', 'unit' => '', 'warn' => 25000, 'alert' => 50000],
+        'maxRevisions' => ['in' => 'db', 'icon' => 'versions-per-entry', 'label' => 'Most versions of one entry', 'unit' => '', 'warn' => 50, 'alert' => 100],
+        'changedFields' => ['in' => 'db', 'icon' => 'changelog', 'label' => 'Change records (rows)', 'unit' => '', 'warn' => 500000, 'alert' => 1000000],
+        'deleted' => ['in' => 'db', 'icon' => 'trash', 'label' => 'Deleted elements (in the trash)', 'unit' => '', 'warn' => 2000, 'alert' => 10000],
+        'backups' => ['in' => 'files', 'icon' => 'backups', 'label' => 'Backups', 'unit' => 'MB', 'warn' => 2000, 'alert' => 5000],
+        'logs' => ['in' => 'files', 'icon' => 'logs', 'label' => 'Logs', 'unit' => 'MB', 'warn' => 300, 'alert' => 1000],
+        'cache' => ['in' => 'files', 'icon' => 'cache', 'label' => 'Cache', 'unit' => 'MB', 'warn' => 500, 'alert' => 2000],
     ];
 
     /** For how many days every single measurement is kept (older days keep the last one, in the course). */

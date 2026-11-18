@@ -117,9 +117,16 @@
     value: settings.logsKeepDays, errors: settings.getErrors('logsKeepDays'),
     disabled: 'logsKeepDays' in overridden, warning: s.warn(overridden, 'logsKeepDays'),
   }) }}
+  {{ forms.textareaField({
+    label: 'Log files to keep'|t('data-keeper'),
+    instructions: 'One file name per line; * stands for any characters (notification-digest.log, formie-*.log). These files are never removed – neither by the rule above nor by «Clear» on the card – and neither are their rotated copies (….log.1).'|t('data-keeper'),
+    id: 'logsKeep', name: 'logsKeep', rows: 3, class: 'code',
+    value: settings.logsKept()|join("\n"), errors: settings.getErrors('logsKeep'),
+    disabled: 'logsKeep' in overridden, warning: s.warn(overridden, 'logsKeep'),
+  }) }}
   {{ forms.lightswitchField({
     label: 'Offer «Clear» for the logs'|t('data-keeper'),
-    instructions: 'A button on the «Logs» card of the overview removes all log files at once, after a confirmation. Independent of the rule above.'|t('data-keeper'),
+    instructions: 'A button on the «Logs» card of the overview removes the log files at once, after a confirmation – except the ones to keep. Independent of the rule above.'|t('data-keeper'),
     id: 'logsClearable', name: 'logsClearable', on: settings.logsClearable,
     disabled: 'logsClearable' in overridden, warning: s.warn(overridden, 'logsClearable'),
   }) }}
@@ -243,13 +250,11 @@
     disabled: 'remindAfterDays' in overridden, warning: s.warn(overridden, 'remindAfterDays'),
   }) }}
 
-  <h3>{{ 'Remote queries'|t('data-keeper') }}</h3>
-  {{ forms.lightswitchField({
-    label: 'Allow remote queries'|t('data-keeper'),
-    instructions: 'A tool outside the site can ask for the stored figures as JSON at the address below. Access needs the key of the site; admins find it on the «Information» tab of the overview and can replace it there.'|t('data-keeper'),
-    id: 'allowRemote', name: 'allowRemote', on: remoteAllowed,
-    disabled: 'allowRemote' in overridden, warning: s.warn(overridden, 'allowRemote'),
-  }) }}
+  <h3>{{ 'Remote monitoring'|t('data-keeper') }}</h3>
+  <p>
+    {{ 'A monitoring tool outside the site can read the versions the site runs on and the stored figures as JSON at the address below. Admins allow this on the «Information» tab of the overview, where they also find the key of the site and can replace it.'|t('data-keeper') }}
+    <a href="{{ cpUrl('data-keeper') }}#dk-infos">{{ 'Open the «Information» tab'|t('data-keeper') }}</a>
+  </p>
   <p class="light">
     {{ 'Address'|t('data-keeper') }}: <code>{{ remoteUrl }}</code><br>
     {{ 'Send the key in the header «X-Data-Keeper-Key: <key>» or «Authorization: Bearer <key>». It is only accepted over HTTPS and never in the address, where it would end up in logs.'|t('data-keeper') }}

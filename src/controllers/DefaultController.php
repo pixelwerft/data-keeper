@@ -6,6 +6,7 @@ use Craft;
 use craft\helpers\App;
 use craft\web\Controller;
 use pixelwerft\datakeeper\DataKeeper;
+use pixelwerft\datakeeper\helpers\Chart;
 use pixelwerft\datakeeper\helpers\Growth;
 use pixelwerft\datakeeper\helpers\Levels;
 use yii\web\ForbiddenHttpException;
@@ -51,8 +52,12 @@ class DefaultController extends Controller
             'cardActions' => [],
             'info' => $this->installation(),
             'lastActions' => $plugin->maintenance->results(),
+            'pending' => $plugin->maintenance->pending(),
+            'justFinished' => $plugin->maintenance->justFinished(),
             'remote' => null,
         ];
+        $variables['stateToken'] = $plugin->maintenance->stateToken($variables['pending']);
+        $variables += $this->statistics($history, $variables['limits']);
         if ($variables['canCleanup']) {
             $variables['cardActions'] = $plugin->maintenance->byFigure();
         }
@@ -63,6 +68,8 @@ class DefaultController extends Controller
                 'key' => $plugin->remote->key(),
                 'createdAt' => $plugin->remote->keyCreatedAt(),
                 'url' => $plugin->remote->url(),
+                // the config file decides, if it says anything: then the switch on the page is not offered
+                'fixed' => $plugin->remote->configKey(),
                 // over plain HTTP a query is refused: the key and the answer would travel unprotected
                 'insecure' => !str_starts_with($plugin->remote->url(), 'https://') && !$plugin->remote->httpAllowed(),
             ];
@@ -95,6 +102,62 @@ class DefaultController extends Controller
         }
 
         return $this->renderTemplate('data-keeper/index', $variables);
+    }
+
+    /** The periods the «Statistics» tab offers: name => days (null: everything that is stored). */
+    private const PERIODS = ['30' => 30, '90' => 90, '365' => 365, 'all' => null];
+
+    /**
+     * The course of every key figure as a chart, for the period asked for with `?period=`.
+     *
+     * @param array<string, array<string, int|float>> $history day => figures
+     * @param array<string, array<string, mixed>> $limits the key figures with their limits
+     * @return array{period: string, periods: string[], charts: array<string, ?array<string, mixed>>, days: int}
+     */
+    private function statistics(array $history, array $limits): array
+    {
+        $period = (string)$this->request->getQueryParam('period', 'all');
+        $period = array_key_exists($period, self::PERIODS) ? $period : 'all';
+        $days = self::PERIODS[$period];
+        if ($days !== null) {
+            $from = date('Y-m-d', strtotime("-$days days"));
+            $history = array_filter($history, fn($day) => $day >= $from, ARRAY_FILTER_USE_KEY);
+        }
+
+        $marks = DataKeeper::$plugin->maintenance->marks();
+        $charts = [];
+        foreach ($limits as $key => $limit) {
+            $series = [];
+            foreach ($history as $day => $figures) {
+                if (is_numeric($figures[$key] ?? null)) {
+                    $series[$day] = $figures[$key] + 0;
+                }
+            }
+            $charts[$key] = Chart::build(
+                $series,
+                ['warn' => $limit['warn'], 'alert' => $limit['alert']],
+                $marks[$key] ?? [],
+                $limit['unit'] === '',
+            );
+        }
+        return ['period' => $period, 'periods' => array_map('strval', array_keys(self::PERIODS)), 'charts' => $charts, 'days' => count($history)];
+    }
+
+    /**
+     * Where the actions stand that run in the background. The overview asks every few seconds while one is pending,
+     * shows the progress and loads itself again when the token is no longer the one it was built with.
+     */
+    public function actionState(): Response
+    {
+        $pending = DataKeeper::$plugin->maintenance->pending();
+        return $this->asJson([
+            'token' => DataKeeper::$plugin->maintenance->stateToken($pending),
+            'pending' => array_map(fn(array $entry) => [
+                'id' => $entry['id'],
+                'state' => $entry['state'],
+                'progress' => $entry['progress'],
+            ], $pending),
+        ]);
     }
 
     /**
@@ -228,6 +291,26 @@ class DefaultController extends Controller
             $this->setFailFlash(DataKeeper::t('The measurement could not be deleted.'));
         }
         return $this->redirect('data-keeper');
+    }
+
+    /** Switches remote queries on or off (admins) – also where settings cannot be saved in the control panel. */
+    public function actionSetRemoteAllowed(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAdmin(false);
+        $remote = DataKeeper::$plugin->remote;
+        $allowed = $this->request->getRequiredBodyParam('allowed') === '1';
+
+        if ($remote->source() === $remote::SOURCE_CONFIG) {
+            $this->setFailFlash(DataKeeper::t('Whether remote monitoring is allowed is set in config/data-keeper.php («{setting}»). Change it there.', ['setting' => $remote->configKey()]));
+        } elseif (!$remote->setAllowed($allowed)) {
+            $this->setFailFlash(DataKeeper::t('This could not be stored. Check that the storage folder is writable.'));
+        } elseif ($allowed) {
+            $this->setSuccessFlash(DataKeeper::t('Remote monitoring is now allowed.'));
+        } else {
+            $this->setSuccessFlash(DataKeeper::t('Remote monitoring is no longer allowed.'));
+        }
+        return $this->redirect('data-keeper#dk-infos');
     }
 
     /** Replaces the key for remote queries by a new one (admins). The old key stops working at once. */

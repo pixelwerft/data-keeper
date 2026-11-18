@@ -11,7 +11,6 @@ use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\helpers\Cp;
 use craft\helpers\FileHelper;
-use craft\helpers\UrlHelper;
 use craft\services\UserPermissions;
 use craft\web\twig\variables\Cp as CpVariable;
 use craft\web\UrlManager;
@@ -51,6 +50,12 @@ class DataKeeper extends Plugin
 
     public string $schemaVersion = '1.0.0';
     public bool $hasCpSettings = true;
+
+    /**
+     * @var bool Where settings cannot be saved (`allowAdminChanges` off, a live server usually), Craft 5.6 and newer
+     * show them read-only instead of refusing the page: what is set can still be looked up there.
+     */
+    public bool $hasReadOnlyCpSettings = true;
     public bool $hasCpSection = true;
 
     public static function config(): array
@@ -104,7 +109,10 @@ class DataKeeper extends Plugin
         if ($user->checkPermission(self::PERMISSION_CLEANUP)) {
             $item['subnav']['cleanup'] = ['label' => self::t('Cleanup'), 'url' => 'data-keeper/cleanup'];
         }
-        if ($user->getIsAdmin() && Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
+        // admins get to the settings from here – also where they cannot be saved, as long as Craft shows them
+        // read-only there (5.6 and newer; older versions refuse the page)
+        $settingsOpen = Craft::$app->getConfig()->getGeneral()->allowAdminChanges || version_compare(Craft::$app->getVersion(), '5.6.0', '>=');
+        if ($user->getIsAdmin() && $settingsOpen) {
             $item['subnav']['settings'] = ['label' => self::t('Settings'), 'url' => 'settings/plugins/data-keeper'];
         }
         return $item;
@@ -140,9 +148,8 @@ class DataKeeper extends Plugin
             'settings' => $this->getSettings(),
             'figures' => $this->measurements->limits(),
             'overridden' => $overridden,
-            'statusUrl' => UrlHelper::siteUrl(Craft::$app->getConfig()->getGeneral()->actionTrigger . '/data-keeper/status'),
+            'statusUrl' => $this->remote->addressOf('status'),
             'remoteUrl' => $this->remote->url(),
-            'remoteAllowed' => $this->remote->enabled(),
         ]);
     }
 

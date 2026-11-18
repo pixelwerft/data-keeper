@@ -38,6 +38,13 @@ class ClearCaches extends Action
         return self::t('Clears Craft’s data cache, the compiled templates and the compiled classes, as the «Caches» utility of Craft does for these three. Nothing is lost: Craft builds them again when they are needed, so the next page views take a little longer. The size on the card counts the cache files on disk; a cache that lives elsewhere (Redis, the database) is cleared too but not counted.');
     }
 
+    public function notes(): array
+    {
+        return [
+            self::t('The files of the control panel in the web folder (cpresources) are left alone on purpose. Removing them makes Craft publish them again, and if that is interrupted, editors and other fields stay empty until someone removes the half-published folder by hand.'),
+        ];
+    }
+
     public function amount(int $count): string
     {
         return self::t('{n, plural, one{# file} other{# files}}', ['n' => $count]);

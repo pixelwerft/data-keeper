@@ -28,6 +28,16 @@ abstract class Action
     /** What the action does and what it leaves alone (translated). */
     abstract public function description(): string;
 
+    /**
+     * What else a person should know before confirming, one paragraph each (translated). Shown below the description.
+     *
+     * @return string[]
+     */
+    public function notes(): array
+    {
+        return [];
+    }
+
     /** A count with its noun, e.g. «3 files» (translated, with plural forms). */
     abstract public function amount(int $count): string;
 

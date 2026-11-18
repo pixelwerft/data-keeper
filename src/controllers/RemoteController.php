@@ -13,14 +13,19 @@ use yii\web\Response;
  * The answer is always JSON, also when something is wrong, because the one who asks is a tool and not a browser:
  *
  * - 405 `method_not_allowed` for anything but GET,
- * - 403 `disabled` while «Allow remote queries» is switched off,
+ * - 403 `disabled` while «Allow remote monitoring» is switched off,
  * - 403 `https_required` over plain HTTP (the key and the answer would travel unprotected),
  * - 401 `unauthorized` without the key of the site or with a wrong one,
  * - 200 with the figures otherwise.
  *
  * The key is read from a header only – `X-Data-Keeper-Key: <key>` or `Authorization: Bearer <key>` – never from the
- * address, which ends up in the logs of web servers and proxies. The endpoint only reads what was stored – it never
- * measures. `?details=1` adds everything else the overview shows, `?history=daily` the course day by day in it.
+ * address, which ends up in the logs of web servers and proxies. (Some web servers do not pass `Authorization` on to
+ * PHP; `X-Data-Keeper-Key` always arrives.) The endpoint only reads what was stored – it never measures.
+ *
+ * Without parameters the answer holds the last measurement and what the site runs on. `?details=1` adds `details`:
+ * everything else the overview shows – the status, the level and the limits of every key figure, tables, folders and
+ * the course over time (`history`: the last measurement of each month). `?details=1&history=daily` gives that course
+ * day by day; `history=daily` on its own changes nothing.
  *
  * Nothing here throws on purpose: Craft logs an exception together with the whole request, and an anonymous caller
  * must not be able to fill the log (or get a trace while dev mode is on).
@@ -59,7 +64,7 @@ class RemoteController extends Controller
         $given = RequestKey::get();
         if (!$remote->matches($given)) {
             $response = $this->problem(401, 'unauthorized', $given === ''
-                ? 'The key of the site is missing. Send it in the header «X-Data-Keeper-Key» or as «Authorization: Bearer <key>».'
+                ? 'The key of the site is missing. Send it in the header «X-Data-Keeper-Key». («Authorization: Bearer <key>» works too, but some web servers do not pass that header on to PHP.)'
                 : 'This is not the key of the site.');
             $response->getHeaders()->set('WWW-Authenticate', 'Bearer');
             return $response;

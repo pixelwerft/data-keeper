@@ -10,6 +10,9 @@
 {% block content %}
   <div class="dk">
     <p class="dk-lead">{{ action.description }}</p>
+    {% for note in action.notes %}
+      <p>{{ note }}</p>
+    {% endfor %}
 
     {% if preview.count == 0 %}
       <p class="dk-note">{{ 'Nothing to do right now.'|t('data-keeper') }}</p>
@@ -27,7 +30,7 @@
           <p>{{ 'This cannot be undone – make sure there is a backup you trust.'|t('data-keeper') }}</p>
           <label class="dk-check"><input type="checkbox" required> {{ 'I understand that this is permanent.'|t('data-keeper') }}</label>
         {% endif %}
-        <p class="light">{{ 'It runs in the background; the result appears in the overview.'|t('data-keeper') }}</p>
+        <p class="light">{{ 'It runs in the background. The overview says that it is running and loads itself again when it is done.'|t('data-keeper') }}</p>
         <button type="submit" class="btn submit">{{ action.label }}</button>
       </form>
     {% endif %}

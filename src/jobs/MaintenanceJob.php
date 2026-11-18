@@ -27,18 +27,24 @@ class MaintenanceJob extends BaseJob
     public function execute($queue): void
     {
         $plugin = DataKeeper::$plugin;
-        if ($plugin->maintenance->action($this->id) === null) {
-            return;
-        }
-
-        $plugin->maintenance->run($this->id, $this->confirmed, $this->source, function(int $done, int $total) use ($queue) {
-            if ($total > 0) {
-                $this->setProgress($queue, 0.9 * $done / $total);
+        try {
+            if ($plugin->maintenance->action($this->id) === null) {
+                return;
             }
-        });
 
-        $this->setProgress($queue, 0.95);
-        $plugin->measurements->measure();
+            $plugin->maintenance->run($this->id, $this->confirmed, $this->source, function(int $done, int $total) use ($queue) {
+                if ($total > 0) {
+                    $this->setProgress($queue, 0.9 * $done / $total);
+                }
+            });
+
+            $this->setProgress($queue, 0.95);
+            $plugin->measurements->measure();
+        } finally {
+            // only now: the overview loads itself again when the action is no longer pending, and should then show
+            // the new measurement
+            $plugin->maintenance->finished($this->id);
+        }
     }
 
     /**
